@@ -1,0 +1,9 @@
+3x bc250s
+1x Tecmojo 9U Server Rack, 10 inch Wide 200mm Deep (https://www.amazon.com.au/dp/B0FHD8V32R?ref=ppx_yo2ov_dt_b_fed_asin_title&th=1)
+2x 1 to 5 Way PWM Fan Hub PC CPU Cooling (https://www.aliexpress.com/item/1005005996242210.html?spm=a2g0o.order_list.order_list_main.41.4aab18025keulw)
+3x TEUCER AF-120 Water Cooler 12cm RGB Fan Processor Heatsink 120mm (https://www.aliexpress.com/item/1005007431587335.html?spm=a2g0o.order_list.order_list_main.35.4aab18025keulw)
+3x 75mm Fan BB7515BU B127515BU DC12V 0.40A 4pin 5000rpm Centrifugal Turbine (https://www.aliexpress.com/item/1005005764300626.html?spm=a2g0o.order_list.order_list_main.29.4aab18025keulw)
+3x 2500Mbps USB 3.0 Type-C Ethernet To RJ45 2.5G (https://www.aliexpress.com/item/1005005260891764.html?spm=a2g0o.order_list.order_list_main.5.4aab18025keulw)
+4x ARCTIC - ACFAN00130A (https://www.scorptec.com.au/product/cooling/fans/88860-acfan00130a)
+1x MSI PRO A1000PL Platinum PCIE5 1000W Power Supply (https://www.scorptec.com.au/product/power-supplies/atx/125476-pro-a1000pl-pcie5)
+1x TP-Link SG105-M2 5 Port 2.5Gbe Switch (https://www.scorptec.com.au/product/networking/switches/87387-tl-sg105-m2)
