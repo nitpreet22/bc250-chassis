@@ -21,21 +21,25 @@ DOCUMENT_PATH = os.path.join(PROJECT_DIR, "bc250_cluster.FCStd")
 REPORT_PATH = os.path.join(PROJECT_DIR, "cad", "fit_report.md")
 
 VOLUME_TOLERANCE = 1.0            # mm^3
-FRAME_BOX = App.BoundBox(-140.0, 0.0, 0.0, 140.0, 200.0, 469.45)
+# Assemblies whose overall size is reported (matched by the start of each object's owner name).
+SIZE_REPORT_ASSEMBLIES = ["Rack_Frames_Reused", "Printed_Case", "Node", "Cable_Channel", "PSU_Box", "Network"]
 
 # Clearances worth knowing when assembling (object name patterns, min distance reported).
 CLEARANCE_PAIRS = [
-    ("Node1_Left_TeucerPump", "SidePanel_L"),
-    ("Node3_Right_TeucerPump", "SidePanel_R"),
-    ("Node1_Left_NexGen_BackBrace", "Node2_Middle_NexGen_BackBrace"),
-    ("Node2_Middle_TeucerPump", "Node3_Right_NexGen_BackBrace"),
-    ("Node2_Middle_USB25GDongle", "TopPanel"),
-    ("Node1_Left_PCB", "CardShelf_Printed"),
-    ("CardShelf_Printed", "PSU_MSI_A1000PL"),
-    ("Node2_Middle_KO_PowerPlugs", "Upright_FrontL"),
-    ("Node3_Right_KO_PowerPlugs", "Upright_FrontR"),
-    ("Tube_Node1_Left_1", "Upright_RearL"),
-    ("Tube_Node3_Right_2", "Upright_RearR"),
+    ("Node1_TeucerPump", "FrontFrame_Window"),
+    ("Node1_MemoryHeatsink_CutCentre", "ColumnDivider_1"),
+    ("Node2_TeucerPump", "ColumnDivider_1"),
+    ("Node3_MemoryHeatsink_CutCentre", "BackFrame_Window"),
+    ("Node1_Radiator", "FrontFrame_UprightL"),
+    ("Node3_MemoryHeatsink_CutCentre", "BackFrame_UprightR"),
+    ("Node1_KO_PowerPlugs", "SideWall_L_CableSlots"),
+    ("Node1_IntakeFan_ArcticP12", "Node1_PCB"),
+    ("Node1_MemoryBlower", "Node1_MemoryHeatsink_CutCentre"),
+    ("Node1_USB25GDongle", "Node1_Tube_2"),
+    ("Node1_RadiatorFan_Teucer", "TopGrille"),
+    ("PSU_MSI_A1000PL", "PSUBox_RearWall_FanGrille"),
+    ("PSU_MSI_A1000PL", "PSUBox_FrontWall_ChannelOpening"),
+    ("PWMFanHub_1", "PSUBox_Lid"),
 ]
 
 
@@ -128,21 +132,17 @@ def find_clashes(objects):
     return clashes
 
 
-def outside_frame(objects):
-    rows = []
+def assembly_boxes(objects, assemblies):
+    """Bounding box per named assembly (all objects whose owner name starts with that name)."""
+    boxes = {}
     for item in objects:
-        if item.role == "rack":
-            continue
-        b = item.box
-        overhang = {
-            "left": FRAME_BOX.XMin - b.XMin, "right": b.XMax - FRAME_BOX.XMax,
-            "front": FRAME_BOX.YMin - b.YMin, "rear": b.YMax - FRAME_BOX.YMax,
-            "below": FRAME_BOX.ZMin - b.ZMin, "above": b.ZMax - FRAME_BOX.ZMax,
-        }
-        sticking_out = {side: round(v, 1) for side, v in overhang.items() if v > 0.05}
-        if sticking_out:
-            rows.append((item.name, sticking_out))
-    return rows
+        for assembly in assemblies:
+            if item.owner.startswith(assembly):
+                if assembly in boxes:
+                    boxes[assembly].add(item.box)
+                else:
+                    boxes[assembly] = App.BoundBox(item.box)
+    return boxes
 
 
 def main():
@@ -152,7 +152,7 @@ def main():
     by_name = {item.name: item for item in objects}
 
     clashes = find_clashes(objects)
-    overhangs = outside_frame(objects)
+    sizes = assembly_boxes(objects, SIZE_REPORT_ASSEMBLIES)
 
     overall = objects[0].box
     for item in objects[1:]:
@@ -175,9 +175,11 @@ def main():
         distance = by_name[name_a].shape.distToShape(by_name[name_b].shape)[0]
         lines.append(f"| {name_a} | {name_b} | {distance:.1f} |")
 
-    lines += ["", "## Parts outside the rack frame (280 x 200 x 469.45)", "",
-              "| Object | Sticks out by (mm) |", "|---|---|"]
-    lines += [f"| {name} | {', '.join(f'{k} {v}' for k, v in sides.items())} |" for name, sides in overhangs]
+    lines += ["", "## Size per assembly (bounding box, mm)", "",
+              "| Assembly | Width X | Depth Y | Height Z | X range | Z range |", "|---|---|---|---|---|---|"]
+    for name, b in sizes.items():
+        lines.append(f"| {name} | {b.XLength:.1f} | {b.YLength:.1f} | {b.ZLength:.1f} | "
+                     f"{b.XMin:.1f} .. {b.XMax:.1f} | {b.ZMin:.1f} .. {b.ZMax:.1f} |")
 
     lines += ["", "## Tube centre-line lengths", "", "| Tube | mm |", "|---|---|"]
     for obj in doc.Objects:

@@ -14,9 +14,15 @@ RENDER_DIR = os.path.join(PROJECT_DIR, "cad", "renders")
 IMAGE_SIZE = (1600, 1200)
 ISOMETRIC_CAMERA = App.Rotation(0.424708, 0.17592, 0.339851, 0.820473)  # FreeCAD's isometric view
 
-# Objects hidden in the "internals" view so the boards, PSU and tubes are visible.
-INTERNALS_HIDDEN_PREFIXES = ("SidePanel", "Upright", "TopPanel", "TopFascia", "Handle",
-                             "FrontFan", "Fan_ArcticP12_Front", "Switch")
+CASE_SHELL = ("SideWall", "TopFascia", "TopGrille", "Handle")
+PSU_BOX_SHELL = ("PSUBox_LeftWall", "PSUBox_RightWall", "PSUBox_RearWall", "PSUBox_Lid", "DeskPowerSupply")
+# Objects hidden in the "internals" views so the boards, PSU and tubes are visible.
+INTERNALS_HIDDEN_PREFIXES = CASE_SHELL + PSU_BOX_SHELL + ("FrontFrame_Window", "BackFrame_Window",
+                                                             "ChannelCover", "ChannelFan", "Switch")
+# Right-side cutaway: just the case's right wall and fascia off, looking at all three columns.
+RIGHT_CUTAWAY_HIDDEN_PREFIXES = ("SideWall_R", "TopFascia_R")
+# Left cutaway: channel cover, its fan and the PSU box shell off, looking at the cable path.
+LEFT_CUTAWAY_HIDDEN_PREFIXES = ("ChannelCover", "ChannelFan", "PSUBox_LeftWall", "PSUBox_Lid", "DeskPowerSupply")
 
 
 def set_visibility(doc, hidden_prefixes):
@@ -58,8 +64,15 @@ def main():
     set_visibility(doc, INTERNALS_HIDDEN_PREFIXES)
     view.viewIsometric()
     save(view, "06_iso_internals.png")
-    view.viewFront()
-    save(view, "07_front_internals.png")
+    set_visibility(doc, RIGHT_CUTAWAY_HIDDEN_PREFIXES)
+    view.viewRight()
+    save(view, "07_right_cutaway_columns.png")
+    set_visibility(doc, LEFT_CUTAWAY_HIDDEN_PREFIXES)
+    view.viewLeft()
+    save(view, "08_left_cutaway_cable_channel.png")
+    set_visibility(doc, ())
+    view.viewRear()
+    save(view, "09_rear_psu_box.png")
 
     App.closeDocument(doc.Name)
     view_settings.SetBool("UseNavigationAnimations", animations_were_on)

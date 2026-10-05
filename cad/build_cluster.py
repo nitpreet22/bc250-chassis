@@ -1,4 +1,4 @@
-"""Build the FreeCAD assembly of a 3-node AMD BC-250 cluster in a Tecmojo 9U 10-inch rack.
+"""Build the FreeCAD assembly of a 3-node AMD BC-250 cluster case and its separate PSU box.
 
 Run with the FreeCAD GUI so colours are saved with the document:
     "C:\\Program Files\\FreeCAD 1.1\\bin\\freecad.exe" cad\\build_cluster.py
@@ -6,16 +6,29 @@ Run with the FreeCAD GUI so colours are saved with the document:
 
 Output: bc250_cluster.FCStd in the project root.
 
-Global frame (mm), viewed from the front of the rack:
-    X = width   (0 = rack centre, + = right)
-    Y = depth   (0 = front face of the frame, + = towards the back)
-    Z = height  (0 = bottom of the frame)
+Global frame (mm), viewed from the front window:
+    X = width   (0 = case centre, + = right)
+    Y = depth   (0 = outer face of the front frame, + = towards the back)
+    Z = height  (0 = bottom of the frames; the case stands on 30 mm printed risers)
 
-Layout (chosen with the user): three boards stand vertically, I/O end up, side by side across
-the width; the PSU lies on the floor under them; the three radiators hang outside the rear rails.
+Case: the Tecmojo rack's two aluminium side frames (upright + upright + clear window) are turned
+90 degrees and become the FRONT and BACK of the case. Printed side walls, top fascias, a top grille
+and a floor join them; the original handles move to the new top.
+
+Thermal layout: three airflow columns one behind the other, one per node. The stock BC-250 fins
+run along the board length, so boards stand I/O-end-up and air flows bottom -> top through them:
+    Arctic P12 intake (bottom) -> board (cut VRM heatsinks + AIO cold head facing the front,
+    stock backplate + cut-out memory heatsink facing the back, blower firing into the memory fins)
+    -> radiator with its Teucer fan pulling (top), exhausting through the top grille.
+
+PSU box: separate, as-shallow-as-possible printed box behind the case, with the owner's desk power
+supply on its lid. Every board's PCIe edge faces left, so the cables run from the box forward
+along a printed channel on the outside of the left wall and enter each column through a slot.
+The 4th Arctic blows into that channel, so fresh air also reaches each column at VRM height.
+The switch stands on the outside of the right wall, ports forward.
 
 Every object carries a `FitRole` property that check_fit.py uses:
-    rack     - rack structure; nothing may overlap it
+    rack     - structure (frames + printed case + PSU box); nothing may overlap it
     hardware - physical parts; must not overlap each other
     keepout  - space reserved for cables that are not modelled
 """
@@ -31,44 +44,60 @@ REFERENCE_DIR = os.path.join(PROJECT_DIR, "reference")
 OUTPUT_PATH = os.path.join(PROJECT_DIR, "bc250_cluster.FCStd")
 
 # ---------------------------------------------------------------------------------------------
-# Rack: Tecmojo 9U 10" mini rack (spec drawing) - values marked EST must be measured.
+# Rack side frames reused as the front and back of the case (Tecmojo spec drawing; the 266 mm
+# clear width between side panels was confirmed, which puts the window 7 mm in from the outside).
+# Each frame: two uprights (20 wide x 35 deep once turned) with a clear window between them.
 # ---------------------------------------------------------------------------------------------
-FRAME_WIDTH = 280.0
-FRAME_DEPTH = 200.0
+FRAME_WIDTH = 200.0               # the rack's depth becomes the case's width
 FRAME_HEIGHT = 469.45
-HANDLE_HEIGHT = 33.0              # 502.45 overall height minus the frame
-UPRIGHT_INNER_X = 105.0           # 210 mm clear opening between the uprights
-UPRIGHT_DEPTH = 20.0              # EST: front-to-back depth of each U-channel upright
-SIDE_PANEL_INNER_X = 133.0        # EST: inner face of the acrylic side panels (266 mm clear)
-SIDE_PANEL_THICKNESS = 4.0        # EST
-TOP_PANEL_THICKNESS = 3.0
-FLOOR_Z = 22.0                    # EST: top of the bottom tray
-TOP_FASCIA_BOTTOM_Z = 432.0       # EST: the logo plate above the 9U rail zone
-TEN_INCH_PANEL_WIDTH = 254.0      # standard 10" rack panel / ear width
-ROOF_Z = FRAME_HEIGHT - TOP_PANEL_THICKNESS
+UPRIGHT_WIDTH = 20.0              # EST: was the upright's side flange
+UPRIGHT_DEPTH = 35.0              # was the upright's front face (rail holes now face sideways)
+WINDOW_OUTER, WINDOW_INNER = 3.0, 7.0      # window position measured in from the frame's outer face
+HANDLE_HEIGHT = 33.0
+TOP_THICKNESS = 3.0
+ROOF_Z = FRAME_HEIGHT - TOP_THICKNESS
+FLOOR_Z = 22.0                    # top of the printed floor (same height as the rack's old tray)
+FASCIA_BOTTOM_Z = 432.0           # EST: the printed fascias replace the rack's logo plates
+RISER_HEIGHT = 30.0               # printed feet: room under the floor for the intakes
+
+# ---------------------------------------------------------------------------------------------
+# Printed case: columns run front to back between the two windows.
+# ---------------------------------------------------------------------------------------------
+WALL = 3.0
+DIVIDER = 2.0
+COLUMN_PITCH = 123.0              # 120 mm fan/radiator + divider + 0.5 mm clearance each side
+SIDE_WALL_INNER_X = FRAME_WIDTH / 2         # side walls bolt onto the uprights' outer rail faces
+COLUMN_START_Y = WINDOW_INNER     # inner face of the front window
+COLUMN_CENTERS_Y = [COLUMN_START_Y + COLUMN_PITCH * (i + 0.5) for i in range(3)]
+CASE_DEPTH = COLUMN_START_Y + 3 * COLUMN_PITCH + WINDOW_INNER    # 386
+UPRIGHT_INNER_X = FRAME_WIDTH / 2 - UPRIGHT_WIDTH                 # 80
 
 # ---------------------------------------------------------------------------------------------
 # BC-250 board, in the coordinates of BC250_Completeish_V1.step ("board-local"):
 #   local X = board length (I/O end at -X), local Y = board width (power connectors at -Y edge),
-#   local Z = thickness (PCB 0..1.6, APU and connectors on +Z, the "top side").
+#   local Z = thickness (PCB 0..1.6, APU on +Z = front, GDDR6 on -Z = back).
 # ---------------------------------------------------------------------------------------------
 BOARD_STEP = os.path.join(REFERENCE_DIR, "BC250_Completeish_V1.step")
-# Only the bare board is used. The STEP also has the stock heatsink, its backplate and a
-# "Cut Heatsink Parts" mod; all of these are replaced by the AIO + NexGen back brace.
-BOARD_STEP_GROUP = "PCB"
 BOARD_LOCAL_X_MAX = 154.6         # far end of the PCB (opposite the I/O)
 BOARD_LOCAL_Y_MIN = -72.2         # power-connector edge
 BOARD_WIDTH = 144.0
-# Thickness of one board "slab" in local Z: from the bolt heads under the NexGen back brace
-# to the top of the Teucer cold head (APU die top 4.0 + 58 mm cold head).
-SLAB_LOCAL_Z_MIN = -14.0
-SLAB_LOCAL_Z_MAX = 62.0
+BOARD_POWER_EDGE_X = -66.0        # power edge faces the PSU box (left); plugs end 11 mm from the wall
+# The STEP shows the stock backplate exploded 200 mm away along -Y; this puts it back in place.
+BACKPLATE_EXPLODE_OFFSET = App.Vector(0, 200.0, 0)
+# The cut-out centre section sits on the back. True = on top of the stock backplate (user's build):
+# it must drop 2 mm from MandicReally's position, where it replaces the backplate.
+MEMORY_HEATSINK_ON_STOCK_BACKPLATE = True
+MEMORY_HEATSINK_DROP = -2.0
+# Slab = everything attached to one board, in local Z: memory heatsink fins .. top of cold head.
+SLAB_LOCAL_Z_MIN = -26.1 + (MEMORY_HEATSINK_DROP if MEMORY_HEATSINK_ON_STOCK_BACKPLATE else 0.0)
+SLAB_LOCAL_Z_MAX = 62.0           # APU die top 4.0 + 58 mm Teucer cold head
+SLAB_CENTER_LOCAL_Z = (SLAB_LOCAL_Z_MIN + SLAB_LOCAL_Z_MAX) / 2
 
-# NexGen3D mount (3MF frame): its Bottom part rests on the PCB top at Z = -1.1, which is
-# local Z = 1.6. The mount is centred on the APU; its exact hole alignment is not modelled.
+# NexGen3D mount, front parts only: the backplate + memory heatsink take the back brace's place.
+# The Teucer block lists AM4/AM5 and LGA17xx hardware, matching the bracket's AM4/LGA1700 patterns.
 NEXGEN_DIR = os.path.join(REFERENCE_DIR, "nexgen3d_aio_mount")
-NEXGEN_PARTS = ["AM4 - Generic Bottom.3mf", "AM4 - Generic Top.3mf", "Back Brace.3mf"]
-NEXGEN_PCB_TOP_Z = -1.1
+NEXGEN_PARTS = ["AM4 - Generic Bottom.3mf", "AM4 - Generic Top.3mf"]
+NEXGEN_PCB_TOP_Z = -1.1           # in the 3MF frame the Bottom part rests on the PCB here
 
 # Teucer AF-120 cold head: 83 x 78.6 x 58 (manual). Lower ring kept narrow to clear the bracket.
 PUMP_LENGTH = 83.0                # along local X
@@ -78,63 +107,74 @@ PUMP_BASE_RADIUS = 30.0
 PUMP_BASE_HEIGHT = 18.0
 FITTING_RADIUS = 7.0
 FITTING_LENGTH = 16.0
-FITTING_LOCAL_Z = 30.0            # low on the cold head (just above the bracket) so the outer
-                                  # nodes' tubes pass inside the 210 mm rear opening
-FITTING_SPACING = 36.0            # between the two tube fittings, along local X
-TUBE_RADIUS = 6.0                 # EST: braided FEP tube
+FITTING_LOCAL_Z = 45.0            # above the rear VRM heatsink (28.1) so tubes run over it
+FITTING_SPACING = 30.0            # along local Y; fittings point up (towards the I/O end)
+TUBE_RADIUS = 6.0                 # EST: braided FEP tube; the user's tubes are 300 mm long
 
 # ---------------------------------------------------------------------------------------------
-# Placement of the three boards.
+# Heights in each column
 # ---------------------------------------------------------------------------------------------
-PSU_SIZE = (150.0, 150.0, 86.0)   # MSI PRO A1000PL: W x D x H
-CARD_SHELF_THICKNESS = 3.0
-BOARD_BOTTOM_Z = FLOOR_Z + PSU_SIZE[2] + 4.0          # 4 mm above the PSU: shelf + clearance
-BOARD_FRONT_Y = 32.0              # leaves ~25 mm in front for the PCIe/Micro-Fit plugs
-WALL_GAP = 4.0
-# (name, pump side, slab min X). pump side +1: top side faces +X and power edge is at the front.
-# pump side -1 is the same board rotated 180 deg about vertical: top faces -X, power edge at the back.
-BOARD_LAYOUT = [
-    ("Node1_Left", -1, -SIDE_PANEL_INNER_X + WALL_GAP),
-    ("Node2_Middle", +1, -38.0),
-    ("Node3_Right", +1, SIDE_PANEL_INNER_X - WALL_GAP - (SLAB_LOCAL_Z_MAX - SLAB_LOCAL_Z_MIN)),
-]
-
-# ---------------------------------------------------------------------------------------------
-# Rear cooling: radiators outside the rear rails, Arctic P12 exhaust fans behind them.
-# ---------------------------------------------------------------------------------------------
-RADIATOR_CORE = 120.0
-RADIATOR_TANK = 17.5              # EST: end tank length (155 mm overall)
-RADIATOR_THICKNESS = 27.0
-RADIATOR_FRONT_Y = 206.0          # 6 mm behind the frame for the printed mounting plate
-RADIATOR_PLATE_Y = (200.5, 204.5)
-RADIATOR_BOTTOMS_Z = [96.0, 220.0, 344.0]   # bottom, middle, top radiator
-PORT_OFFSET_X = 68.0              # tube ports on the end tank, facing the rack
-PORT_SPACING_Z = 50.0
 FAN_SIZE = 120.0
 FAN_THICKNESS = 25.0
-# Tubes run straight back from the fittings to a vertical routing plane between the rear
-# uprights, then: across to their own X "lane" -> up/down to the port height -> across to the
-# port -> back into the port. Lanes are ordered so that no tube's horizontal leg crosses
-# another tube's vertical run.
-TUBE_PLANE_Y = 190.0
-# node: (radiator index into RADIATOR_BOTTOMS_Z, end tank side -1 left / +1 right,
-#        (lane X for the lower tube, lane X for the upper tube))
-TUBE_ROUTES = {
-    "Node1_Left": (2, -1, (-82.0, -97.0)),
-    "Node2_Middle": (1, -1, (-54.0, -40.0)),
-    "Node3_Right": (0, +1, (97.0, 82.0)),
-}
+INTAKE_FAN_Z = (FLOOR_Z + 0.5, FLOOR_Z + 0.5 + FAN_THICKNESS)
+BOARD_BOTTOM_Z = 55.0             # 7.5 mm above the intake fan
+RADIATOR_LENGTH = 155.0           # user: 155 x 120; runs across the case (X)
+RADIATOR_CORE = 120.0             # along the column (Y)
+RADIATOR_THICKNESS = 27.0         # EST: not given yet
+RADIATOR_TOP_Z = ROOF_Z - 2.0 - FAN_THICKNESS - 0.5
+RADIATOR_Z = (RADIATOR_TOP_Z - RADIATOR_THICKNESS, RADIATOR_TOP_Z)
+PORT_X = RADIATOR_LENGTH / 2 - 8.75         # tube ports on the right-hand end tank, pointing down
+PORT_OFFSET_Y = 16.0              # ports either side of the tube risers' row
+PORT_LENGTH = 8.0
+PLENUM_TUBE_Z = 397.0             # tubes cross over to the ports here, just under the port stubs
+
+# ---------------------------------------------------------------------------------------------
+# PSU cabling: a printed channel on the outside of the left wall (every board's PCIe edge faces
+# left) runs back to the PSU box. The 4th Arctic blows into the channel, so fresh air also
+# leaves through each cable slot into its column at front-VRM height.
+# ---------------------------------------------------------------------------------------------
+CABLE_SLOT_Z = (70.0, 145.0)      # covers the PCIe 8-pin + Micro-Fit plugs (Z 76-140)
+CHANNEL_DEPTH = 17.0              # free width inside the channel (X)
+CHANNEL_OUTER_X = -(SIDE_WALL_INNER_X + WALL + CHANNEL_DEPTH + WALL)     # -123: outer face of its cover
+CHANNEL_Z = (30.0, 150.0)         # tall enough for the 120 mm fan opening
+CHANNEL_FRONT_Y = 40.0
+CHANNEL_FAN_Y = (COLUMN_START_Y + COLUMN_PITCH * 1.5 - FAN_SIZE / 2,
+                 COLUMN_START_Y + COLUMN_PITCH * 1.5 + FAN_SIZE / 2)      # beside node 2
+
+# ---------------------------------------------------------------------------------------------
+# PSU box behind the case, as shallow as possible: the PSU stands on its side with its 86 mm
+# dimension front-to-back. Fan breathes through the rear wall, modular cables leave on the left
+# into the channel, AC socket through the right wall. A desk power supply sits on the lid.
+# ---------------------------------------------------------------------------------------------
+BOX_GAP = 1.0                     # between the case's back frame and the box
+BOX_FRONT_Y = CASE_DEPTH + BOX_GAP
+BOX_LEFT_X = CHANNEL_OUTER_X      # flush with the channel cover so the channel runs straight in
+CABLE_LANE = 35.0                 # modular-cable bend space left of the PSU
+PSU_SIZE_STANDING = (150.0, 86.0, 150.0)   # MSI PRO A1000PL on its side: X x Y x Z, fan facing +Y
+PSU_X = (BOX_LEFT_X + WALL + CABLE_LANE, BOX_LEFT_X + WALL + CABLE_LANE + PSU_SIZE_STANDING[0])
+BOX_RIGHT_X = PSU_X[1] + WALL     # right wall carries the AC cutout, so the AC plug is outside
+PSU_Y = (BOX_FRONT_Y + WALL + 0.5, BOX_FRONT_Y + WALL + 0.5 + PSU_SIZE_STANDING[1])
+BOX_REAR_Y = PSU_Y[1] + 3.0 + WALL          # 3 mm between the PSU fan and the rear grille
+BOX_FLOOR_Z = -RISER_HEIGHT       # the box stands on the table
+PSU_Z = (BOX_FLOOR_Z + WALL + 0.5, BOX_FLOOR_Z + WALL + 0.5 + PSU_SIZE_STANDING[2])
+BOX_TOP_Z = CHANNEL_Z[1]          # the channel enters at full height; fan hubs sit on the PSU
+DESK_PSU_SIZE = (140.0, 90.0, 40.0)         # user: 90 x 140 footprint; height is an estimate
+SWITCH_SIZE = (26.0, 126.0, 209.0)          # TL-SG105-M2 standing on the case's right wall, ports forward
 
 # Colours (r, g, b) 0..1
 PCB_GREEN = (0.10, 0.35, 0.18)
 COMPONENT_GREY = (0.25, 0.25, 0.27)
 CONNECTOR_BLACK = (0.08, 0.08, 0.08)
-RACK_WHITE = (0.92, 0.92, 0.90)
-ACRYLIC_SMOKE = (0.35, 0.35, 0.38)
+HEATSINK_ALU = (0.78, 0.78, 0.80)
+BACKPLATE_DARK = (0.30, 0.31, 0.33)
+FRAME_ALU = (0.80, 0.81, 0.83)
+WINDOW_CLEAR = (0.70, 0.80, 0.90)
 STEEL_BLACK = (0.12, 0.12, 0.13)
 PRINTED_ORANGE = (0.95, 0.45, 0.10)
+PRINTED_GREY = (0.45, 0.47, 0.50)
 PUMP_BLACK = (0.15, 0.15, 0.17)
 FAN_GREY = (0.30, 0.30, 0.32)
+BLOWER_BLUE = (0.20, 0.35, 0.60)
 RADIATOR_SILVER = (0.55, 0.57, 0.60)
 TUBE_BLACK = (0.05, 0.05, 0.05)
 KEEPOUT_ORANGE = (1.00, 0.55, 0.00)
@@ -182,7 +222,7 @@ def tube_along(points, radius):
 
 
 def remove_repeated_points(points):
-    """Drop consecutive duplicates (a lane can coincide with the fitting's own X)."""
+    """Drop consecutive duplicates (a port can line up with its riser)."""
     kept = [points[0]]
     for point in points[1:]:
         if (point - kept[-1]).Length > 1e-6:
@@ -214,42 +254,89 @@ def tag_feature(feature, container, color, role, transparency):
 
 
 # ---------------------------------------------------------------------------------------------
-# Rack
+# Reused rack parts: the two side frames (now front and back) and the two handles
 # ---------------------------------------------------------------------------------------------
-def build_rack(doc):
-    rack = doc.addObject("App::Part", "Rack_Tecmojo_9U")
-    half_width = FRAME_WIDTH / 2
-    for side_name, side in (("L", -1), ("R", +1)):
-        x_range = sorted((side * UPRIGHT_INNER_X, side * half_width))
-        for end_name, y_range in (("Front", (0.0, UPRIGHT_DEPTH)),
-                                  ("Rear", (FRAME_DEPTH - UPRIGHT_DEPTH, FRAME_DEPTH))):
-            add_feature(doc, rack, f"Upright_{end_name}{side_name}",
-                        box(x_range, y_range, (0.0, ROOF_Z)), RACK_WHITE, "rack")
-        panel_x = sorted((side * SIDE_PANEL_INNER_X, side * (SIDE_PANEL_INNER_X + SIDE_PANEL_THICKNESS)))
-        add_feature(doc, rack, f"SidePanel_{side_name}",
-                    box(panel_x, (UPRIGHT_DEPTH, FRAME_DEPTH - UPRIGHT_DEPTH), (0.0, ROOF_Z)),
-                    ACRYLIC_SMOKE, "rack", transparency=75)
-        handle_x = sorted((side * 117.0, side * 133.0))
-        handle = box(handle_x, (20.0, 180.0), (FRAME_HEIGHT + HANDLE_HEIGHT - 12, FRAME_HEIGHT + HANDLE_HEIGHT))
-        for leg_y in ((20.0, 35.0), (165.0, 180.0)):
-            handle = handle.fuse(box(handle_x, leg_y, (FRAME_HEIGHT, FRAME_HEIGHT + HANDLE_HEIGHT)))
-        add_feature(doc, rack, f"Handle_{side_name}", handle.removeSplitter(), STEEL_BLACK, "rack")
+def build_rack_frames(doc):
+    group = doc.addObject("App::Part", "Rack_Frames_Reused")
+    half = FRAME_WIDTH / 2
+    for name, outer_y, inward in (("Front", 0.0, +1), ("Back", CASE_DEPTH, -1)):
+        upright_y = sorted((outer_y, outer_y + inward * UPRIGHT_DEPTH))
+        window_y = sorted((outer_y + inward * WINDOW_OUTER, outer_y + inward * WINDOW_INNER))
+        for side_name, x_range in (("L", (-half, -UPRIGHT_INNER_X)), ("R", (UPRIGHT_INNER_X, half))):
+            add_feature(doc, group, f"{name}Frame_Upright{side_name}",
+                        box(x_range, upright_y, (0.0, ROOF_Z)), FRAME_ALU, "rack")
+        add_feature(doc, group, f"{name}Frame_Window",
+                    box((-UPRIGHT_INNER_X, UPRIGHT_INNER_X), window_y, (0.0, ROOF_Z)),
+                    WINDOW_CLEAR, "rack", transparency=80)
 
-    add_feature(doc, rack, "TopPanel",
-                box((-half_width, half_width), (0.0, FRAME_DEPTH), (ROOF_Z, FRAME_HEIGHT)), STEEL_BLACK, "rack")
-    add_feature(doc, rack, "TopFascia",
-                box((-UPRIGHT_INNER_X, UPRIGHT_INNER_X), (0.0, 2.0), (TOP_FASCIA_BOTTOM_Z, ROOF_Z)),
-                RACK_WHITE, "rack")
-    add_feature(doc, rack, "BottomTray",
-                box((-SIDE_PANEL_INNER_X, SIDE_PANEL_INNER_X), (0.0, FRAME_DEPTH), (FLOOR_Z - 4, FLOOR_Z)),
-                STEEL_BLACK, "rack")
-    return rack
+    # The original handles, now across the front and back ends of the printed top.
+    for name, y_range in (("Front", (10.0, 26.0)), ("Back", (CASE_DEPTH - 26.0, CASE_DEPTH - 10.0))):
+        handle = box((-80.0, 80.0), y_range, (FRAME_HEIGHT + HANDLE_HEIGHT - 12, FRAME_HEIGHT + HANDLE_HEIGHT))
+        for leg_x in ((-80.0, -65.0), (65.0, 80.0)):
+            handle = handle.fuse(box(leg_x, y_range, (FRAME_HEIGHT, FRAME_HEIGHT + HANDLE_HEIGHT)))
+        add_feature(doc, group, f"Handle_{name}", handle.removeSplitter(), STEEL_BLACK, "rack")
+    return group
 
 
 # ---------------------------------------------------------------------------------------------
-# BC-250 node: board + NexGen mount + Teucer cold head + VRM blower + USB 2.5G dongle
+# Printed case parts: side walls, fascias, top grille, floor, dividers, risers, cable slots
 # ---------------------------------------------------------------------------------------------
-def classify_board_part(label):
+def cable_slot_boxes(wall_x_range):
+    """One slot per node in a wall, where that node's PCIe/Micro-Fit plugs sit."""
+    slots = []
+    for centre_y in COLUMN_CENTERS_Y:
+        slots.append(box(wall_x_range, (centre_y - 20.0, centre_y + 30.0), CABLE_SLOT_Z))
+    return slots
+
+
+def build_case(doc):
+    group = doc.addObject("App::Part", "Printed_Case")
+    half = SIDE_WALL_INNER_X
+    full_depth = (0.0, CASE_DEPTH)
+
+    left_x, right_x = (-half - WALL, -half), (half, half + WALL)
+    left_wall = box(left_x, full_depth, (0.0, FASCIA_BOTTOM_Z))
+    for slot in cable_slot_boxes(left_x):
+        left_wall = left_wall.cut(slot)
+    add_feature(doc, group, "SideWall_L_CableSlots", left_wall, PRINTED_GREY, "rack", transparency=30)
+    add_feature(doc, group, "SideWall_R", box(right_x, full_depth, (0.0, FASCIA_BOTTOM_Z)),
+                PRINTED_GREY, "rack", transparency=30)
+    for side_name, x_range in (("L", left_x), ("R", right_x)):
+        add_feature(doc, group, f"TopFascia_{side_name}", box(x_range, full_depth, (FASCIA_BOTTOM_Z, ROOF_Z)),
+                    PRINTED_ORANGE, "rack")
+
+    top = box((-half - WALL, half + WALL), full_depth, (ROOF_Z, FRAME_HEIGHT))
+    for centre_y in COLUMN_CENTERS_Y:
+        top = top.cut(box((-62.0, 62.0), (centre_y - 58.0, centre_y + 58.0), (ROOF_Z, FRAME_HEIGHT)))
+    add_feature(doc, group, "TopGrille", top, PRINTED_GREY, "rack")
+
+    # Full width between the uprights' depth, narrower where it passes between each frame's uprights.
+    floor_z = (FLOOR_Z - 4.0, FLOOR_Z)
+    floor = box((-half, half), (UPRIGHT_DEPTH, CASE_DEPTH - UPRIGHT_DEPTH), floor_z)
+    floor = floor.fuse([box((-UPRIGHT_INNER_X, UPRIGHT_INNER_X), (COLUMN_START_Y, UPRIGHT_DEPTH), floor_z),
+                        box((-UPRIGHT_INNER_X, UPRIGHT_INNER_X), (CASE_DEPTH - UPRIGHT_DEPTH,
+                                                                   CASE_DEPTH - WINDOW_INNER), floor_z)])
+    for centre_y in COLUMN_CENTERS_Y:
+        floor = floor.cut(box((-59.0, 59.0), (centre_y - 59.0, centre_y + 59.0), (FLOOR_Z - 4.0, FLOOR_Z)))
+    add_feature(doc, group, "Floor_IntakeGrilles", floor, PRINTED_GREY, "rack")
+
+    for index in (1, 2):
+        y = COLUMN_START_Y + COLUMN_PITCH * index
+        add_feature(doc, group, f"ColumnDivider_{index}",
+                    box((-half, half), (y - DIVIDER / 2, y + DIVIDER / 2), (INTAKE_FAN_Z[0], ROOF_Z)),
+                    PRINTED_GREY, "rack", transparency=40)
+
+    for x_range in ((-half, -UPRIGHT_INNER_X), (UPRIGHT_INNER_X, half)):
+        for y_range in ((0.0, UPRIGHT_DEPTH), (CASE_DEPTH - UPRIGHT_DEPTH, CASE_DEPTH)):
+            add_feature(doc, group, f"Riser_{int(x_range[0])}_{int(y_range[0])}",
+                        box(x_range, y_range, (-RISER_HEIGHT, 0.0)), PRINTED_GREY, "rack")
+    return group
+
+
+# ---------------------------------------------------------------------------------------------
+# BC-250 node
+# ---------------------------------------------------------------------------------------------
+def classify_pcb_part(label):
     if label == "SOLID001":
         return "pcb"
     connector_words = ("Port", "RJ45", "DisplayPort", "Power", "Molex", "Pin Header", "M.2", "CR2032")
@@ -258,30 +345,55 @@ def classify_board_part(label):
     return "components"
 
 
-def is_in_board_group(obj):
+def group_chain(obj):
+    labels = []
     parent = obj.getParentGeoFeatureGroup()
     while parent is not None:
-        if parent.Label == BOARD_STEP_GROUP:
-            return True
+        labels.append(parent.Label)
         parent = parent.getParentGeoFeatureGroup()
-    return False
+    return labels
+
+
+def classify_step_part(obj):
+    """Which part of the node a STEP body belongs to, or None for the unused stock heatsink."""
+    chain = group_chain(obj)
+    if "PCB" in chain:
+        return classify_pcb_part(obj.Label)
+    if any("Backside Memory" in label for label in chain):
+        return "memory_heatsink"
+    if any("Front VRM" in label for label in chain):
+        return "front_vrm_heatsink"
+    if any("Rear VRM" in label for label in chain):
+        return "rear_vrm_heatsink"
+    if "Backplate" in chain:
+        return "backplate"
+    return None
 
 
 def load_board_shapes():
-    """Return ({pcb|connectors|components: compound}, apu_centre, apu_top_z) in board-local coords."""
+    """Return ({part name: compound}, apu_centre, apu_top_z), all in board-local coords."""
     temp_doc = App.newDocument("bc250_step_import")
     Import.insert(BOARD_STEP, temp_doc.Name)
-    groups = {"pcb": [], "connectors": [], "components": []}
+    groups = {}
     apu_boxes = []
     for obj in temp_doc.Objects:
-        if obj.TypeId != "Part::Feature" or obj.Shape.isNull() or not is_in_board_group(obj):
+        if obj.TypeId != "Part::Feature" or obj.Shape.isNull():
+            continue
+        part_name = classify_step_part(obj)
+        if part_name is None:
             continue
         shape = obj.Shape.copy()
         shape.Placement = obj.getGlobalPlacement()
-        groups[classify_board_part(obj.Label)].append(shape)
+        if part_name == "backplate":
+            shape.translate(BACKPLATE_EXPLODE_OFFSET)
+        if part_name == "memory_heatsink" and MEMORY_HEATSINK_ON_STOCK_BACKPLATE:
+            shape.translate(App.Vector(0, 0, MEMORY_HEATSINK_DROP))
+        groups.setdefault(part_name, []).append(shape)
         if obj.Label.startswith("APU"):
             apu_boxes.append(shape.BoundBox)
     App.closeDocument(temp_doc.Name)
+    if not MEMORY_HEATSINK_ON_STOCK_BACKPLATE:
+        groups.pop("backplate")
 
     apu_box = apu_boxes[0]
     for other in apu_boxes[1:]:
@@ -292,9 +404,7 @@ def load_board_shapes():
 
 def load_nexgen_meshes(apu_centre):
     """NexGen mount meshes moved into board-local coords (centred on the APU, seated on the PCB)."""
-    meshes = {}
-    for filename in NEXGEN_PARTS:
-        meshes[filename] = Mesh.Mesh(os.path.join(NEXGEN_DIR, filename))
+    meshes = {filename: Mesh.Mesh(os.path.join(NEXGEN_DIR, filename)) for filename in NEXGEN_PARTS}
     bottom_box = meshes[NEXGEN_PARTS[0]].BoundBox
     offset = App.Vector(apu_centre.x - bottom_box.Center.x,
                         apu_centre.y - bottom_box.Center.y,
@@ -304,25 +414,22 @@ def load_nexgen_meshes(apu_centre):
     return meshes
 
 
-def board_placement(pump_side, slab_min_x):
-    """Board-local -> global. local X -> -Z (I/O up), local Y -> pump_side*Y, local Z -> pump_side*X."""
-    if pump_side > 0:
-        tx = slab_min_x - SLAB_LOCAL_Z_MIN
-        ty = BOARD_FRONT_Y - BOARD_LOCAL_Y_MIN
-    else:
-        tx = slab_min_x + SLAB_LOCAL_Z_MAX
-        ty = BOARD_FRONT_Y + BOARD_WIDTH + BOARD_LOCAL_Y_MIN
+def board_placement(column_centre_y):
+    """Board-local -> global: local X -> -Z (I/O up), local Y -> +X (power edge on the left,
+    towards the PSU box), local Z -> -Y (cold head faces the front window).
+    The slab is centred in its column."""
+    tx = BOARD_POWER_EDGE_X - BOARD_LOCAL_Y_MIN
+    ty = column_centre_y + SLAB_CENTER_LOCAL_Z
     tz = BOARD_BOTTOM_Z + BOARD_LOCAL_X_MAX
-    s = float(pump_side)
-    matrix = App.Matrix(0, 0, s, tx,
-                        0, s, 0, ty,
+    matrix = App.Matrix(0, 1, 0, tx,
+                        0, 0, -1, ty,
                         -1, 0, 0, tz,
                         0, 0, 0, 1)
     return App.Placement(matrix)
 
 
-def pump_shapes(apu_centre, die_top_z, pump_side):
-    """Cold head body and its two tube fittings (board-local). Fittings point to the rack rear."""
+def pump_shapes(apu_centre, die_top_z):
+    """Cold head body and its two tube fittings (board-local). Fittings point to the I/O end (up)."""
     base = Part.makeCylinder(PUMP_BASE_RADIUS, PUMP_BASE_HEIGHT,
                              App.Vector(apu_centre.x, apu_centre.y, die_top_z))
     body_bottom = die_top_z + PUMP_BASE_HEIGHT
@@ -330,133 +437,183 @@ def pump_shapes(apu_centre, die_top_z, pump_side):
                        (PUMP_LENGTH, PUMP_WIDTH, die_top_z + PUMP_HEIGHT - body_bottom))
     body = body.makeFillet(8.0, [edge for edge in body.Edges
                                  if abs(edge.Vertexes[0].Z - edge.Vertexes[1].Z) > 1])
-    # Local +Y is the rack rear for pump_side +1, local -Y for pump_side -1.
-    rear_y = pump_side
-    side_face_y = apu_centre.y + rear_y * PUMP_WIDTH / 2
+    face_x = apu_centre.x - PUMP_LENGTH / 2
     fittings, tips = [], []
     for offset in (-FITTING_SPACING / 2, FITTING_SPACING / 2):
-        start = App.Vector(apu_centre.x + offset, side_face_y, FITTING_LOCAL_Z)
-        fittings.append(Part.makeCylinder(FITTING_RADIUS, FITTING_LENGTH, start, App.Vector(0, rear_y, 0)))
-        tips.append(start + App.Vector(0, rear_y * FITTING_LENGTH, 0))
+        start = App.Vector(face_x, apu_centre.y + offset, FITTING_LOCAL_Z)
+        fittings.append(Part.makeCylinder(FITTING_RADIUS, FITTING_LENGTH, start, App.Vector(-1, 0, 0)))
+        tips.append(start + App.Vector(-FITTING_LENGTH, 0, 0))
     return base.fuse(body).removeSplitter(), Part.makeCompound(fittings), tips
 
 
-def build_node(doc, name, pump_side, slab_min_x, board_shapes, apu_centre, die_top_z, nexgen_meshes):
-    node = doc.addObject("App::Part", name)
-    node.Placement = board_placement(pump_side, slab_min_x)
+def card_guide_shapes():
+    """Printed rails gripping both long PCB edges (board-local). The front rail skips the
+    PCIe 8-pin + Micro-Fit connectors."""
+    def rail(x_range, outer_y, edge_y, inner_y):
+        spine = box(x_range, sorted((outer_y, edge_y)), (-1.5, 3.1))
+        back_lip = box(x_range, sorted((edge_y, inner_y)), (-1.5, 0.0))
+        front_lip = box(x_range, sorted((edge_y, inner_y)), (1.6, 3.1))
+        return spine.fuse([back_lip, front_lip]).removeSplitter()
 
-    add_feature(doc, node, f"{name}_PCB", board_shapes["pcb"].copy(), PCB_GREEN)
-    add_feature(doc, node, f"{name}_Components", board_shapes["components"].copy(), COMPONENT_GREY)
-    add_feature(doc, node, f"{name}_Connectors", board_shapes["connectors"].copy(), CONNECTOR_BLACK)
+    front_edge, rear_edge = BOARD_LOCAL_Y_MIN - 1.0, BOARD_LOCAL_Y_MIN + BOARD_WIDTH + 1.0
+    rails = [rail((-150.0, 65.0), front_edge - 4.8, front_edge, front_edge + 3.0),
+             rail((138.0, 152.0), front_edge - 4.8, front_edge, front_edge + 3.0),
+             rail((-150.0, 152.0), rear_edge + 4.8, rear_edge, rear_edge - 3.0)]
+    return Part.makeCompound(rails)
+
+
+def build_node(doc, index, board_shapes, apu_centre, die_top_z, nexgen_meshes):
+    name = f"Node{index + 1}"
+    column_y = COLUMN_CENTERS_Y[index]
+    node = doc.addObject("App::Part", name)
+    board = doc.addObject("App::Part", f"{name}_Board")
+    node.addObject(board)
+    board.Placement = board_placement(column_y)
+
+    add_feature(doc, board, f"{name}_PCB", board_shapes["pcb"].copy(), PCB_GREEN)
+    add_feature(doc, board, f"{name}_Components", board_shapes["components"].copy(), COMPONENT_GREY)
+    add_feature(doc, board, f"{name}_Connectors", board_shapes["connectors"].copy(), CONNECTOR_BLACK)
+    if "backplate" in board_shapes:
+        add_feature(doc, board, f"{name}_StockBackplate", board_shapes["backplate"].copy(), BACKPLATE_DARK)
+    add_feature(doc, board, f"{name}_MemoryHeatsink_CutCentre", board_shapes["memory_heatsink"].copy(), HEATSINK_ALU)
+    add_feature(doc, board, f"{name}_VRMHeatsink_Front", board_shapes["front_vrm_heatsink"].copy(), HEATSINK_ALU)
+    add_feature(doc, board, f"{name}_VRMHeatsink_Rear", board_shapes["rear_vrm_heatsink"].copy(), HEATSINK_ALU)
     for filename, mesh in nexgen_meshes.items():
         part_name = filename.replace(".3mf", "").replace(" - ", "_").replace(" ", "")
-        add_mesh(doc, node, f"{name}_NexGen_{part_name}", mesh.copy(), PRINTED_ORANGE)
+        add_mesh(doc, board, f"{name}_NexGen_{part_name}", mesh.copy(), PRINTED_ORANGE)
 
-    pump, fittings, fitting_tips = pump_shapes(apu_centre, die_top_z, pump_side)
-    add_feature(doc, node, f"{name}_TeucerPump", pump, PUMP_BLACK)
-    add_feature(doc, node, f"{name}_PumpFittings", fittings, STEEL_BLACK)
+    pump, fittings, fitting_tips = pump_shapes(apu_centre, die_top_z)
+    add_feature(doc, board, f"{name}_TeucerPump", pump, PUMP_BLACK)
+    add_feature(doc, board, f"{name}_PumpFittings", fittings, STEEL_BLACK)
 
-    # BB7515 blower lying over the front VRM area, clear of the mount bracket.
-    add_feature(doc, node, f"{name}_VRMBlower", box((76.0, 151.0), (-40.0, 35.0), (16.0, 31.0)), FAN_GREY)
+    # BB7515 blower on the back, below the memory heatsink, firing up into its fins.
+    add_feature(doc, board, f"{name}_MemoryBlower", box((79.0, 154.0), (-37.0, 38.0), (-20.0, -5.0)), BLOWER_BLUE)
+    add_feature(doc, board, f"{name}_CardGuides", card_guide_shapes(), PRINTED_ORANGE)
 
-    # USB 2.5G dongle: plug in the upper USB 3.0 port, body lying beside it above the board.
-    add_feature(doc, node, f"{name}_USBPlug", box((-185.0, -157.2), (-13.0, 3.0), (9.5, 17.5)), CONNECTOR_BLACK)
-    add_feature(doc, node, f"{name}_USB25GDongle", box((-183.0, -166.0), (8.0, 70.0), (2.0, 28.0)), CONNECTOR_BLACK)
-
-    # Space for the PCIe 8-pin + 2x Micro-Fit plugs and their cable bends past the board edge.
-    add_feature(doc, node, f"{name}_KO_PowerPlugs",
+    # USB 2.5G dongle: plug in the upper USB 3.0 port, body lying beside it above the board on the
+    # power-edge side, away from the tubes.
+    add_feature(doc, board, f"{name}_USBPlug", box((-185.0, -157.2), (-13.0, 3.0), (9.5, 17.5)), CONNECTOR_BLACK)
+    add_feature(doc, board, f"{name}_USB25GDongle", box((-183.0, -166.0), (-75.0, -15.0), (2.0, 28.0)), CONNECTOR_BLACK)
+    add_feature(doc, board, f"{name}_KO_PowerPlugs",
                 box((70.0, 134.0), (BOARD_LOCAL_Y_MIN - 23.0, BOARD_LOCAL_Y_MIN), (-2.0, 14.0)),
                 KEEPOUT_ORANGE, "keepout", transparency=70)
 
-    global_tips = [node.Placement.multVec(tip) for tip in fitting_tips]
-    return node, global_tips
+    # Column hardware in global coordinates.
+    fan_y = (column_y - FAN_SIZE / 2, column_y + FAN_SIZE / 2)
+    add_feature(doc, node, f"{name}_IntakeFan_ArcticP12",
+                fan_shape((-FAN_SIZE / 2, FAN_SIZE / 2), fan_y, INTAKE_FAN_Z), FAN_GREY)
+    radiator_y = (column_y - RADIATOR_CORE / 2, column_y + RADIATOR_CORE / 2)
+    add_feature(doc, node, f"{name}_Radiator",
+                box((-RADIATOR_LENGTH / 2, RADIATOR_LENGTH / 2), radiator_y, RADIATOR_Z), RADIATOR_SILVER)
+    add_feature(doc, node, f"{name}_RadiatorFan_Teucer",
+                fan_shape((-FAN_SIZE / 2, FAN_SIZE / 2), fan_y,
+                          (RADIATOR_Z[1] + 0.5, RADIATOR_Z[1] + 0.5 + FAN_THICKNESS)), FAN_GREY)
+
+    # The two fittings sit side by side across the case (X). The fitting nearer the port side
+    # feeds the front port; the other steps back first, so their runs never cross.
+    tips = sorted((board.Placement.multVec(tip) for tip in fitting_tips), key=lambda v: v.x, reverse=True)
+    port_bottom_z = RADIATOR_Z[0] - PORT_LENGTH
+    ports = [App.Vector(PORT_X, tips[0].y - PORT_OFFSET_Y, port_bottom_z),
+             App.Vector(PORT_X, tips[0].y + PORT_OFFSET_Y, port_bottom_z)]
+    add_feature(doc, node, f"{name}_RadiatorPorts",
+                Part.makeCompound([Part.makeCylinder(TUBE_RADIUS, PORT_LENGTH, p, App.Vector(0, 0, 1)) for p in ports]),
+                STEEL_BLACK)
+    for tube_index, (tip, port) in enumerate(zip(tips, ports)):
+        route = remove_repeated_points([tip,
+                                        App.Vector(tip.x, tip.y, PLENUM_TUBE_Z),
+                                        App.Vector(tip.x, port.y, PLENUM_TUBE_Z),
+                                        App.Vector(port.x, port.y, PLENUM_TUBE_Z),
+                                        port])
+        feature = add_feature(doc, node, f"{name}_Tube_{tube_index + 1}", tube_along(route, TUBE_RADIUS), TUBE_BLACK)
+        feature.addProperty("App::PropertyLength", "PathLength", "Fit", "Centre-line length of the tube")
+        feature.PathLength = sum((b - a).Length for a, b in zip(route, route[1:]))
+    return node
 
 
 # ---------------------------------------------------------------------------------------------
-# PSU, card shelf, fan hubs, front fan, switch
+# Cable channel on the left wall, with the 4th Arctic blowing into it
 # ---------------------------------------------------------------------------------------------
-def build_power_and_misc(doc):
-    group = doc.addObject("App::Part", "Power_And_Network")
-    psu_x, psu_y = (-128.0, -128.0 + PSU_SIZE[0]), (30.0, 30.0 + PSU_SIZE[1])
-    psu = box(psu_x, psu_y, (FLOOR_Z, FLOOR_Z + PSU_SIZE[2]))
-    ac_inlet = box((-100.0, -72.0), (psu_y[1], psu_y[1] + 2.0), (40.0, 68.0))
-    add_feature(doc, group, "PSU_MSI_A1000PL", psu.fuse(ac_inlet).removeSplitter(), STEEL_BLACK)
-    add_feature(doc, group, "KO_PSU_ModularCables",
-                box((-100.0, 15.0), (5.0, psu_y[0]), (FLOOR_Z + 3, FLOOR_Z + PSU_SIZE[2] - 3)),
-                KEEPOUT_ORANGE, "keepout", transparency=70)
-    add_feature(doc, group, "KO_PSU_ACCord",
-                box((-100.0, -72.0), (psu_y[1] + 2.0, 215.0), (40.0, 68.0)),
-                KEEPOUT_ORANGE, "keepout", transparency=70)
+CHANNEL_INNER_X = (CHANNEL_OUTER_X + WALL, -SIDE_WALL_INNER_X - WALL)      # free space inside
 
-    shelf_z = (BOARD_BOTTOM_Z - CARD_SHELF_THICKNESS - 0.5, BOARD_BOTTOM_Z - 0.5)
-    add_feature(doc, group, "CardShelf_Printed",
-                box((-131.0, 131.0), (BOARD_FRONT_Y, BOARD_FRONT_Y + BOARD_WIDTH), shelf_z), PRINTED_ORANGE)
 
-    for index, y_start in enumerate((40.0, 80.0), start=1):
-        add_feature(doc, group, f"PWMFanHub_{index}",
-                    box((35.0, 115.0), (y_start, y_start + 25.0), (FLOOR_Z, FLOOR_Z + 12.0)), PCB_GREEN)
+def build_cable_channel(doc):
+    group = doc.addObject("App::Part", "Cable_Channel")
+    shell_z = (CHANNEL_Z[0] - WALL, CHANNEL_Z[1] + WALL)
+    channel_y = (CHANNEL_FRONT_Y, BOX_FRONT_Y)
 
-    # Arctic P12 #4: front intake behind a printed 3U 10" fan panel on the front rails.
-    fan_z = (300.0, 300.0 + FAN_SIZE)
-    panel = box((-TEN_INCH_PANEL_WIDTH / 2, TEN_INCH_PANEL_WIDTH / 2), (-3.0, 0.0), (fan_z[0] - 6.7, fan_z[1] + 6.65))
-    panel = panel.cut(Part.makeCylinder(58.0, 3.0, App.Vector(0, -3.0, sum(fan_z) / 2), App.Vector(0, 1, 0)))
-    add_feature(doc, group, "FrontFanPanel_Printed", panel, PRINTED_ORANGE)
-    add_feature(doc, group, "Fan_ArcticP12_FrontIntake",
-                fan_shape((-60.0, 60.0), (0.5, 0.5 + FAN_THICKNESS), fan_z), FAN_GREY)
+    cover = box((CHANNEL_OUTER_X, CHANNEL_OUTER_X + WALL), (CHANNEL_FRONT_Y - WALL, BOX_FRONT_Y), shell_z)
+    fan_centre = App.Vector(CHANNEL_OUTER_X, sum(CHANNEL_FAN_Y) / 2, sum(CHANNEL_Z) / 2)
+    cover = cover.cut(Part.makeCylinder(FAN_SIZE / 2 - 2.0, WALL, fan_centre, App.Vector(1, 0, 0)))
+    add_feature(doc, group, "ChannelCover_FanOpening", cover, PRINTED_ORANGE, "rack", transparency=30)
+    caps = [box(CHANNEL_INNER_X, channel_y, (shell_z[0], CHANNEL_Z[0])),
+            box(CHANNEL_INNER_X, channel_y, (CHANNEL_Z[1], shell_z[1])),
+            box(CHANNEL_INNER_X, (CHANNEL_FRONT_Y - WALL, CHANNEL_FRONT_Y), shell_z)]
+    add_feature(doc, group, "ChannelCaps", Part.makeCompound(caps), PRINTED_ORANGE, "rack")
 
-    # TL-SG105-M2 on the perforated top panel, between the handles.
-    switch = box((-104.5, 104.5), (37.0, 163.0), (FRAME_HEIGHT + 2.0, FRAME_HEIGHT + 28.0))
-    add_feature(doc, group, "Switch_TL-SG105-M2", switch, SWITCH_BLUE)
+    fan_x = (CHANNEL_OUTER_X - 0.5 - FAN_THICKNESS, CHANNEL_OUTER_X - 0.5)
+    add_feature(doc, group, "ChannelFan_ArcticP12", fan_shape(fan_x, CHANNEL_FAN_Y, CHANNEL_Z), FAN_GREY)
     return group
 
 
 # ---------------------------------------------------------------------------------------------
-# Rear radiators + fans + tubes
+# PSU box behind the case, with the desk power supply on its lid
 # ---------------------------------------------------------------------------------------------
-def radiator_port_positions(radiator_index, tank_side):
-    bottom = RADIATOR_BOTTOMS_Z[radiator_index]
-    centre_z = bottom + RADIATOR_CORE / 2
-    x = tank_side * PORT_OFFSET_X
-    return [App.Vector(x, RADIATOR_FRONT_Y - 8.0, centre_z + dz)
-            for dz in (-PORT_SPACING_Z / 2, PORT_SPACING_Z / 2)]
+def build_psu_box(doc):
+    group = doc.addObject("App::Part", "PSU_Box")
+    wall_z = (BOX_FLOOR_Z, BOX_TOP_Z)
+    box_y = (BOX_FRONT_Y, BOX_REAR_Y)
+    between_x = (BOX_LEFT_X + WALL, BOX_RIGHT_X - WALL)
+    between_y = (BOX_FRONT_Y + WALL, BOX_REAR_Y - WALL)
+    ac_y = (PSU_Y[0] + 28.0, PSU_Y[0] + 58.0)
+    ac_z = (PSU_Z[1] - 40.0, PSU_Z[1] - 10.0)
+
+    add_feature(doc, group, "PSUBox_LeftWall", box((BOX_LEFT_X, BOX_LEFT_X + WALL), box_y, wall_z),
+                PRINTED_GREY, "rack", transparency=30)
+    right_wall = box((BOX_RIGHT_X - WALL, BOX_RIGHT_X), box_y, wall_z)
+    right_wall = right_wall.cut(box((BOX_RIGHT_X - WALL, BOX_RIGHT_X), ac_y, ac_z))
+    add_feature(doc, group, "PSUBox_RightWall_ACCutout", right_wall, PRINTED_GREY, "rack", transparency=30)
+    front_wall = box(between_x, (BOX_FRONT_Y, BOX_FRONT_Y + WALL), wall_z)
+    front_wall = front_wall.cut(box(CHANNEL_INNER_X, (BOX_FRONT_Y, BOX_FRONT_Y + WALL), CHANNEL_Z))
+    add_feature(doc, group, "PSUBox_FrontWall_ChannelOpening", front_wall, PRINTED_GREY, "rack", transparency=30)
+    rear_wall = box(between_x, (BOX_REAR_Y - WALL, BOX_REAR_Y), wall_z)
+    psu_fan_centre = App.Vector(sum(PSU_X) / 2, BOX_REAR_Y - WALL, sum(PSU_Z) / 2)
+    rear_wall = rear_wall.cut(Part.makeCylinder(65.0, WALL, psu_fan_centre, App.Vector(0, 1, 0)))
+    add_feature(doc, group, "PSUBox_RearWall_FanGrille", rear_wall, PRINTED_GREY, "rack", transparency=30)
+    add_feature(doc, group, "PSUBox_Floor", box(between_x, between_y, (BOX_FLOOR_Z, BOX_FLOOR_Z + WALL)),
+                PRINTED_GREY, "rack")
+    add_feature(doc, group, "PSUBox_Lid", box((BOX_LEFT_X, BOX_RIGHT_X), box_y, (BOX_TOP_Z, BOX_TOP_Z + WALL)),
+                PRINTED_GREY, "rack", transparency=30)
+
+    psu = box(PSU_X, PSU_Y, PSU_Z)
+    ac_inlet = box((PSU_X[1], PSU_X[1] + 2.0), ac_y, ac_z)
+    add_feature(doc, group, "PSU_MSI_A1000PL", psu.fuse(ac_inlet).removeSplitter(), STEEL_BLACK)
+    add_feature(doc, group, "KO_PSU_ModularCables",
+                box((PSU_X[0] - 26.0, PSU_X[0]), (PSU_Y[0] + 3, PSU_Y[1] - 3), (PSU_Z[0] + 3, PSU_Z[1] - 3)),
+                KEEPOUT_ORANGE, "keepout", transparency=70)
+    add_feature(doc, group, "KO_PSU_ACCord", box((PSU_X[1] + 2.0, PSU_X[1] + 40.0), ac_y, ac_z),
+                KEEPOUT_ORANGE, "keepout", transparency=70)
+
+    hub_z = (PSU_Z[1] + 0.5, PSU_Z[1] + 12.5)
+    for index, y_offset in enumerate((5.0, 35.0), start=1):
+        add_feature(doc, group, f"PWMFanHub_{index}",
+                    box((PSU_X[0] + 5.0, PSU_X[0] + 85.0), (PSU_Y[0] + y_offset, PSU_Y[0] + y_offset + 25.0), hub_z),
+                    PCB_GREEN)
+
+    desk_x = ((BOX_LEFT_X + BOX_RIGHT_X - DESK_PSU_SIZE[0]) / 2, (BOX_LEFT_X + BOX_RIGHT_X + DESK_PSU_SIZE[0]) / 2)
+    desk_y = ((BOX_FRONT_Y + BOX_REAR_Y - DESK_PSU_SIZE[1]) / 2, (BOX_FRONT_Y + BOX_REAR_Y + DESK_PSU_SIZE[1]) / 2)
+    lid_top = BOX_TOP_Z + WALL
+    add_feature(doc, group, "DeskPowerSupply_OnLid", box(desk_x, desk_y, (lid_top, lid_top + DESK_PSU_SIZE[2])),
+                SWITCH_BLUE)
+    return group
 
 
-def build_rear_cooling(doc, fitting_tips_by_node):
-    group = doc.addObject("App::Part", "Rear_Cooling")
-    half_length = RADIATOR_CORE / 2 + RADIATOR_TANK
-    radiator_y = (RADIATOR_FRONT_Y, RADIATOR_FRONT_Y + RADIATOR_THICKNESS)
-    for index, bottom in enumerate(RADIATOR_BOTTOMS_Z):
-        top = bottom + RADIATOR_CORE
-        label = ("Bottom", "Middle", "Top")[index]
-        plate = box((-TEN_INCH_PANEL_WIDTH / 2, TEN_INCH_PANEL_WIDTH / 2), RADIATOR_PLATE_Y, (bottom - 2.0, top + 2.0))
-        plate = plate.cut(box((-76.0, 76.0), RADIATOR_PLATE_Y, (bottom + 1.0, top - 1.0)))
-        add_feature(doc, group, f"RadiatorPlate_{label}_Printed", plate, PRINTED_ORANGE)
-
-        radiator = box((-half_length, half_length), radiator_y, (bottom, top))
-        add_feature(doc, group, f"Radiator_{label}", radiator, RADIATOR_SILVER)
-        fan_y = (radiator_y[1] + 0.5, radiator_y[1] + 0.5 + FAN_THICKNESS)
-        add_feature(doc, group, f"Fan_ArcticP12_{label}Exhaust",
-                    fan_shape((-FAN_SIZE / 2, FAN_SIZE / 2), fan_y, (bottom, top)), FAN_GREY)
-
-    for node_name, tips in fitting_tips_by_node.items():
-        radiator_index, tank_side, lanes = TUBE_ROUTES[node_name]
-        ports = radiator_port_positions(radiator_index, tank_side)
-        port_parts = [Part.makeCylinder(TUBE_RADIUS, 8.0, port, App.Vector(0, 1, 0)) for port in ports]
-        add_feature(doc, group, f"RadiatorPorts_{node_name}", Part.makeCompound(port_parts), STEEL_BLACK)
-        # The lower fitting feeds the lower port, the upper fitting the upper port.
-        lower_first_tips = sorted(tips, key=lambda v: v.z)
-        for tube_index, (tip, port, lane_x) in enumerate(zip(lower_first_tips, ports, lanes)):
-            route = [tip,
-                     App.Vector(tip.x, TUBE_PLANE_Y, tip.z),
-                     App.Vector(lane_x, TUBE_PLANE_Y, tip.z),
-                     App.Vector(lane_x, TUBE_PLANE_Y, port.z),
-                     App.Vector(port.x, TUBE_PLANE_Y, port.z),
-                     port]
-            route = remove_repeated_points(route)
-            tube = tube_along(route, TUBE_RADIUS)
-            feature = add_feature(doc, group, f"Tube_{node_name}_{tube_index + 1}", tube, TUBE_BLACK)
-            feature.addProperty("App::PropertyLength", "PathLength", "Fit", "Centre-line length of the tube")
-            feature.PathLength = sum((b - a).Length for a, b in zip(route, route[1:]))
+def build_switch(doc):
+    """TL-SG105-M2 standing on the outside of the case's right wall, ports facing forward."""
+    group = doc.addObject("App::Part", "Network")
+    x0 = SIDE_WALL_INNER_X + WALL + 0.5
+    add_feature(doc, group, "Switch_TL-SG105-M2",
+                box((x0, x0 + SWITCH_SIZE[0]), (15.0, 15.0 + SWITCH_SIZE[1]), (150.0, 150.0 + SWITCH_SIZE[2])),
+                SWITCH_BLUE)
     return group
 
 
@@ -472,13 +629,13 @@ def main():
     nexgen_meshes = load_nexgen_meshes(apu_centre)
 
     doc = App.newDocument("bc250_cluster")
-    build_rack(doc)
-    fitting_tips_by_node = {}
-    for name, pump_side, slab_min_x in BOARD_LAYOUT:
-        _, tips = build_node(doc, name, pump_side, slab_min_x, board_shapes, apu_centre, die_top_z, nexgen_meshes)
-        fitting_tips_by_node[name] = tips
-    build_power_and_misc(doc)
-    build_rear_cooling(doc, fitting_tips_by_node)
+    build_rack_frames(doc)
+    build_case(doc)
+    for index in range(3):
+        build_node(doc, index, board_shapes, apu_centre, die_top_z, nexgen_meshes)
+    build_cable_channel(doc)
+    build_psu_box(doc)
+    build_switch(doc)
     doc.recompute()
     doc.saveAs(OUTPUT_PATH)
     print(f"Saved {OUTPUT_PATH} with {len(doc.Objects)} objects")
