@@ -78,11 +78,107 @@ Sources: [BC-250 cooling docs](https://elektricm.github.io/amd-bc250-docs/hardwa
    swap if memory or VRM temperatures run high.
 3. **PSU headroom:** 3 × 320 W at full GPU load is about the A1000PL's 1000 W limit.
 
-### Wiring
+### Power wiring (MSI PRO A1000PL PCIE5)
+
+Each board has three 12 V inputs, all on the same 12 V plane:
+- **J1000**, the PCIe 8-pin: 3 × 12 V.
+- **J2000 and J2001**, the Molex Micro-Fit 2×4 headers next to it: 3 × 12 V each.
+
+At a full overclock (~320 W, about 27 A), J1000 alone would carry ~9 A per pin. That is the Mini-Fit
+limit, and three times the 150 W PCIe rating. Feeding the Micro-Fits as well spreads the current
+over 9 pins (about 3 A each).
+
+**The PSU has exactly enough outputs:**
+- 5 shared CPU/PCIe 8-pin sockets, which take the 3 PCIe 6+2 cables and the 2 EPS 4+4 cables
+  (all 18 AWG).
+- 1 × 12V-2x6 socket with its 600 W cable (16 AWG).
+- One 12 V rail, 83.3 A.
+
+| Node | J1000 (PCIe 8-pin) | J2000 + J2001 (Micro-Fit) |
+|---|---|---|
+| 1 | Stock PCIe 6+2 cable | Stock EPS 4+4 cable → EPS-to-2×Micro-Fit adapter |
+| 2 | Stock PCIe 6+2 cable | Stock EPS 4+4 cable → EPS-to-2×Micro-Fit adapter |
+| 3 | Stock PCIe 6+2 cable | MODDIY 12V-2x6 (PSU socket) to dual PCIe 8-pin direct cable ($24.99, replaces the stock 12V-2x6 cable) **or** the stock 12V-2x6 cable plus a MODDIY 12V-2x6-to-2×PCIe adapter ($19.99). Cheapest finish (shipping to Australia): one PCIe plug → COMeap "PCIe 8-pin female to CPU 8-pin male" adapter (Amazon AU B08M5F7K5J, 18 AWG) → a third MODDIY EPS-to-2×Micro-Fit adapter, the same part as nodes 1–2. That's about US$15 plus about AU$15, against US$78.82 for two eBay PCIe-to-Micro-Fit cables with US$35.65 shipping. MODDIY won't make a one-off adapter that plugs onto a 12V-2x6 cable end: the 16-pin female housing needs a moulded part (support chat, 2026-10-06). |
+
+**DIY option for node 3 (cheapest, fewest connections).** Cut the stock 12V-2x6 cable about
+30–40 cm from its PSU end; you lose that cable for any future GPU.
+- Its 6 × 12 V and 6 × GND wires (16 AWG) map one to one onto two Micro-Fit plugs: 3 × 12 V +
+  3 × GND each.
+- Splice each wire to an 18 AWG lead (solder + heat-shrink, staggered). The generic Micro-Fit
+  terminals take 18–22 AWG, not 16 AWG.
+- Use Micro-Fit 3.0 2×4 plug housings (Molex 43025-0800 style) with socket terminals, e.g.
+  AliExpress 1005007856738983, 2×4P variant.
+- Cut back the 4 thin sense wires and insulate each one separately.
+- Crimping needs an open-barrel crimper for 3.0 mm terminals (e.g. IWISS SN-28B / Engineer PA-09).
+
+**Before building, find each pin's role on the unpowered board with a multimeter:**
+- A cavity is 12 V if it beeps to J1000's 12 V pins.
+- It is GND if it beeps to J1000's GND pins.
+- A pin that beeps to neither is LED or PGD, and must stay empty.
+
+This settles the disagreement between the docs. Before first power-on: pull-test every crimp,
+check 12 V to GND is not shorted, and feel the plugs after a 30-minute load.
+
+**Ready-made EPS-to-Micro-Fit adapters:**
+- MODDIY "Standard 8 Pin EPS12V to 2 x MicroFit" (16 AWG, 25 cm). Do **not** buy the "Supermicro"
+  version: it plugs into a Supermicro PSU, not into a cable.
+- mosfet.party's EPS-to-dual-Micro-Fit adapter. Its maker says to always use it together with J1000.
+
+**Safety:**
+- Use only MSI's own modular cables on the PSU side. Modular pinouts differ between brands.
+- EPS and PCIe 8-pin plugs look alike but swap 12 V and ground. Never force one into the other's
+  socket.
+- **J2001's PGD pin turns the board off when shorted to ground.** In each Micro-Fit plug, the cavity
+  over PGD (and over LED1/LED2 on J2000) must be empty. The community docs disagree on where PGD
+  sits, so check the plug against the board before powering on.
+- A MODDIY buyer reports cutting the Micro-Fit latches off for the plugs to fit.
+- Power every input of a board from this one PSU. Never mix in the desk supply.
+
+**Power on:**
+- The boards start as soon as 12 V appears.
+- The ATX 24-pin cable only needs PS_ON shorted to ground. A 24-pin jumper with a switch on the
+  stock cable lets the PSU's switch start all three nodes.
+
+**Option checked: "ATX 24-pin to 2× 6+2 PCIe with switch" adapter (AliExpress 4000175207092).**
+Judged from the product photos:
+- **It fits.** The PSU's 24-pin cable ends in a standard ATX plug, and the PCIe plugs are standard
+  6+2.
+- **It works as the power-on switch.** Its rocker switches PS_ON.
+- **It's a weak 12 V source.** Only two 12 V wires (18 AWG) enter it, one per PCIe plug, with a
+  loop bridging the plug's other 12 V pins. Each plug is about one wire (~7–8 A, ~90 W).
+- **Feeding node 3's Micro-Fits from it:**
+  - It would carry only ~20–25 % of node 3's current (estimate).
+  - Node 3's J1000 would stay at ~7 A per pin, against ~3–4 A with the 12V-2x6 route.
+  - If node 3's PCIe cable ever came loose, that single wire would take the whole board's current.
+    The PSU's 92 A over-current limit would not trip.
+- **Use it as the power-on switch and leave its PCIe plugs unplugged.** Keep the 12V-2x6 route
+  for node 3.
+- Before first use, check with a multimeter: 12 V on the three pins in one row of each PCIe plug.
+- The cable model doesn't yet reserve space for that coiled 24-pin cable or for the adapters' split
+  points. The plug keep-out at each node already covers all three plugs.
+
+**Budget:**
+
+| Load | Per node | Three nodes | PSU load |
+|---|---|---|---|
+| Sustained 40 CU compute at 2 GHz | 220–230 W | ~690 W | ~70 % |
+| Furmark, overclocked | 320 W | ~960 W | 96 % |
+
+The first is comfortable. The second leaves no margin: cap the GPU clock if all three will run flat
+out together.
+
+Sources: [BC-250 power docs](https://elektricm.github.io/amd-bc250-docs/hardware/power/),
+[pinouts](https://elektricm.github.io/amd-bc250-docs/hardware/pinouts/),
+[mothenjoyer69 hardware notes](https://github.com/mothenjoyer69/bc250-documentation/blob/main/hardware.md),
+[Cybenetics A1000PL report](https://www.cybenetics.com/evaluations/psus/3058/),
+[MSI spec](https://www.msi.com/Power-Supply/PRO-A1000PL-PCIE5/Specification),
+[mosfet.party adapter](https://mosfet.party/products/eps-8pin-to-dual-microfit),
+[MODDIY adapter](https://www.moddiy.com/products/6837/Standard-8-Pin-EPS12V-to-2-x-MicroFit-8-Pin-Cable-for-ASRock-BC250.html).
+
+### Other wiring
 
 - Put each node's pump, radiator fan and blower on **that node's own fan headers**. The hubs then
-  run the 4 Arctics, which are 3-pin and fixed-speed.
-- The PSU has exactly **3 PCIe 6+2 cables**, one per node.
+  run the 4 Arctics, which are 3-pin and fixed-speed. The hubs take power from a PSU SATA cable.
 - Each node's power button sits under its radiator. Set the **AUTO_PWRON** jumper so the nodes boot
   when the PSU switches on.
 
