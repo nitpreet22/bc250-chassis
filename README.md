@@ -189,6 +189,11 @@ Sources: [BC-250 power docs](https://elektricm.github.io/amd-bc250-docs/hardware
 - **Mounting:** the Teucer block's hardware covers AM4/AM5, LGA2011, LGA17xx, 115x and 1366. The
   NexGen "AM4 - Generic" bracket is drilled for the AM4/AM5 and LGA1700/1851 patterns, so the
   Teucer's AM4 or LGA17xx hardware should line up. Confirm when the coolers arrive.
+- **Update 2026-10-09:**
+  - The modelled V1 bracket is obsolete. Its V2 is Thermalright-specific and clamps with a plate
+    on the back of the board, where the memory heatsink goes.
+  - The plan is now a Teucer-specific mount that screws into the cut centre piece's posts. See
+    `BUILD.md`.
 
 ## Still unknown
 
@@ -207,6 +212,7 @@ Sources: [BC-250 power docs](https://elektricm.github.io/amd-bc250-docs/hardware
 
 | Path | Purpose |
 |---|---|
+| `BUILD.md` | Build order, the heatsink-cut procedure and the measurements needed before printing |
 | `bc250_cluster.FCStd` | The assembly. Open it in FreeCAD 1.1. |
 | `cad/build_cluster.py` | Builds the assembly. All dimensions and assumptions are constants at the top. |
 | `cad/check_fit.py` | Clash, keep-out, clearance, size and tube-length report -> `cad/fit_report.md` |
