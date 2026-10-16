@@ -77,6 +77,11 @@ Board 3 is apart from the V2 pilot. Its heatsink is uncut, so it goes back as it
 
 ### Step 2: measurements for the V1 case
 
+Enter the readings on the **BC-250 Measurement Sheet**
+(https://claude.ai/artifact/FGaDxPEHDyKGMmBPLqynri). It has a dimensioned drawing for each
+group and saves every reading so Claude can read it back. It covers more than the summary below:
+82 readings, IDs B, S, K, C, R, F, P, X and the Version 2 M/RAD series.
+
 | # | Measure | Why |
 |---|---|---|
 | V1 | Board slab with the stock heatsink fitted: fin tips to the backplate's outside face, including screw heads | Column depth and fan-wall position |
@@ -86,6 +91,78 @@ Board 3 is apart from the V2 pilot. Its heatsink is uncut, so it goes back as it
 | V5 | BB7515 blower: outline, outlet size and position, mounting holes | Blower bracket |
 | V6 | How many fan headers each board has, and their type (3- or 4-pin) | Fan wiring |
 | V7 | PWM hub and USB 2.5 GbE adapter: body sizes | Mounts |
+
+### Case structure: slide-in rails (decided 2026-10-16)
+
+Design review: https://claude.ai/artifact/1nEufsxaiA2zksetCsb2rq. The case is built to forgive print
+and assembly errors instead of needing every hole to line up.
+
+- **Plates slide in.** Fan plates, dividers and the back plate drop down channels (rib pairs) on the
+  side walls' inside faces and stand on a stop at the bottom. Channel 3.8 mm for a 3 mm plate; plate
+  ends 1 mm short of each wall. The walls can be 1 mm too close or 2 mm too far apart.
+- **Lids hold them down.** Each cold box's lid sits over the tops of its fan plate and divider; the
+  roof does the same for the back plate.
+- **Only tie parts screw to the walls**, through slots: lids and roof tiles (±1.5 mm up and down),
+  cradles and crossbars (±1.5 mm front to back). 26 wall screws in all, down from 74.
+- **2 mm fan gap**, set with the printed shim: hold it between fan and fins while you tighten a
+  board's cradle and crossbar, then pull it out.
+- **Nuts press into hex pockets** on the lids, roof tiles and splice bars and stay there. The cradles
+  and crossbars already printed keep their slot nuts; tape holds those during assembly.
+- **Crossbar hold-down:** the new crossbars have a lip over each PCB corner, so a tipped case can't
+  lift a board. Unscrew the crossbar to lift a board out. The crossbars already printed work, without
+  the lip.
+- **Side walls in six pieces each:** three strips split at the dividers' rails (screwed front to back
+  through the rail stop and a post above the lid, M3 × 10), each in a lower and an upper piece
+  (joined by splice bars on the inside of each cold box and the rear plenum, M3 × 8).
+
+Print files (`cad/print/case_parts.py` regenerates them all from `cad/v1_model.py`):
+
+| File in `cad/print/stl/` | Qty | Notes |
+|---|---|---|
+| `rail_test.stl` | 1 | **Print first** (about 30 min): rail section, plate offcut, press-in nut block, gap shim |
+| `case/wall_R_strip{1,2,3}_{lower,upper}.stl` | 1 each | inside face up |
+| `case/wall_L_strip{1,2,3}_{lower,upper}.stl` | 1 each | inside face up |
+| `case/fanplate_lower.stl`, `case/fanplate_upper.stl` | 3 each | upper bed also has the two joining strips |
+| `case/divider_lower.stl`, `case/divider_upper.stl` | 2 each | |
+| `case/backplate_lower.stl`, `case/backplate_upper.stl` | 1 each | |
+| `case/roof_front.stl`, `case/roof_back.stl` | 1 each | upside down |
+| `case/small_parts.stl` | 1 | 3 lids, 8 splice bars, 2 gap shims |
+| `case/crossbars_holddown.stl` | 1 | optional: crossbars with the hold-down lip |
+
+Assembly order:
+
+1. Join each side wall's six pieces on the bench (splice bars, then the front-to-back seam screws).
+2. Bolt both walls to the front and back rack frames: an open-topped box.
+3. Screw in the cradles. Stand each board in its cradle and fit its crossbar loosely.
+4. Drop each column's divider halves and fan plate halves (fans, clips, joining strips and blower
+   holder already fitted) down their rails.
+5. Shim the fan gap, slide the board against the shim, tighten cradle and crossbar, remove the shim.
+6. Lids (2 screws each), back plate halves, roof tiles (8 screws). Window panels any time after.
+
+To change a fan or board later: roof tile and that column's lid off, then lift the part out.
+
+### Side windows (decided 2026-10-15)
+
+Each column has a window opening over its hot zone, closed by a clear **printed PCTG** panel
+screwed to the outside of the wall. The opening is split by the solid band at the wall seam; one
+panel covers both parts. The panels carry no load, so they can go on any time. Until then, tape
+card over the openings so hot air can't leak out sideways and back into the intakes.
+
+| Panel | Qty | Size (mm) | File |
+|---|---|---|---|
+| Right wall | 3 | 83.7 × 233 × 2 | `cad/print/stl/window_panel_right.stl` |
+| Left wall (shorter: solid wall round the power-cable slots) | 3 | 83.7 × 158 × 2 | `cad/print/stl/window_panel_left.stl` |
+
+- **Filament:** clear PCTG, about 260 g for all six; one 1 kg spool. Bambu Studio profile
+  "Generic PCTG @BBL A1".
+- **Clarity:** dry the filament, 100 % infill in one direction, slow outer walls. The face against
+  the plate copies the plate: the textured PEI gives a frosted pattern, a smooth plate a glossy face.
+  Printed PCTG is translucent, not glass-clear.
+- **Test first:** print one right panel and screw it on before the other five. The 4 mm holes
+  allow ±0.5 mm; PCTG's shrink hasn't been measured, so the export uses the PLA Matte figure.
+- **Screws:** M3 × 8 from the outside into nuts pressed into the pockets on the wall's inside face.
+- **The view:** the boards stand across the case, so a side window shows each board edge-on: fans,
+  fins, PCB edge and blower. The board faces show only through the front and back frames.
 
 ## Version 2 (later): AIO water cooling and the heatsink cut
 

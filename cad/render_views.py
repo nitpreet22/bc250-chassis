@@ -9,8 +9,10 @@ import FreeCAD as App
 import FreeCADGui as Gui
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DOCUMENT_PATH = os.path.join(PROJECT_DIR, "bc250_cluster.FCStd")
-RENDER_DIR = os.path.join(PROJECT_DIR, "cad", "renders")
+DOCUMENT_NAME = os.environ.get("BC250_DOCUMENT", "bc250_cluster.FCStd")
+DOCUMENT_PATH = os.path.join(PROJECT_DIR, DOCUMENT_NAME)
+IS_V1 = DOCUMENT_NAME == "bc250_v1.FCStd"
+RENDER_DIR = os.path.join(PROJECT_DIR, "cad", "renders", "v1") if IS_V1 else os.path.join(PROJECT_DIR, "cad", "renders")
 IMAGE_SIZE = (1600, 1200)
 ISOMETRIC_CAMERA = App.Rotation(0.424708, 0.17592, 0.339851, 0.820473)  # FreeCAD's isometric view
 
@@ -25,6 +27,12 @@ RIGHT_CUTAWAY_HIDDEN_PREFIXES = ("SideWall_R", "TopFascia_R")
 LEFT_CUTAWAY_HIDDEN_PREFIXES = ("ChannelCover", "ChannelFan", "PSUBox_LeftWall", "PSUBox_Lid", "DeskPowerSupply")
 
 
+# V1: the right wall off shows the three columns side on; walls, roof and frames off show the boards.
+V1_RIGHT_CUTAWAY_HIDDEN = ("SideWall_R",)
+V1_INTERNALS_HIDDEN = ("SideWall", "RoofGrille", "FrontFrame", "BackFrame")
+V1_ONE_COLUMN_HIDDEN = V1_INTERNALS_HIDDEN + ("Col2", "Col3", "Node2", "Node3", "BackPlate")
+
+
 def set_visibility(doc, hidden_prefixes):
     for obj in doc.Objects:
         if obj.TypeId in ("Part::Feature", "Mesh::Feature"):
@@ -34,6 +42,30 @@ def set_visibility(doc, hidden_prefixes):
 def save(view, filename):
     view.fitAll()
     view.saveImage(os.path.join(RENDER_DIR, filename), IMAGE_SIZE[0], IMAGE_SIZE[1], "White")
+
+
+def render_v1(doc, view):
+    set_visibility(doc, ())
+    view.viewIsometric()
+    save(view, "01_iso_front_right.png")
+    view.setCameraOrientation(App.Rotation(App.Vector(0, 0, 1), 180).multiply(ISOMETRIC_CAMERA))
+    save(view, "02_iso_rear_left.png")
+    set_visibility(doc, V1_RIGHT_CUTAWAY_HIDDEN)
+    view.viewRight()
+    save(view, "03_right_cutaway_columns.png")
+    set_visibility(doc, V1_INTERNALS_HIDDEN)
+    view.viewIsometric()
+    save(view, "04_iso_internals.png")
+    set_visibility(doc, V1_ONE_COLUMN_HIDDEN)
+    view.setCameraOrientation(App.Rotation(App.Vector(0, 0, 1), 180).multiply(ISOMETRIC_CAMERA))
+    save(view, "05_column1_rear_left.png")
+    view.viewIsometric()
+    save(view, "06_column1_front_right.png")
+    set_visibility(doc, ())
+    view.viewFront()
+    save(view, "07_front.png")
+    view.viewTop()
+    save(view, "08_top.png")
 
 
 def main():
@@ -46,6 +78,11 @@ def main():
     Gui.ActiveDocument = Gui.getDocument(doc.Name)
     view = Gui.ActiveDocument.ActiveView
     view.setAxisCross(False)
+
+    if IS_V1:
+        render_v1(doc, view)
+        finish(doc, view_settings, animations_were_on)
+        return
 
     set_visibility(doc, ())
     view.viewIsometric()
@@ -74,6 +111,10 @@ def main():
     view.viewRear()
     save(view, "09_rear_psu_box.png")
 
+    finish(doc, view_settings, animations_were_on)
+
+
+def finish(doc, view_settings, animations_were_on):
     App.closeDocument(doc.Name)
     view_settings.SetBool("UseNavigationAnimations", animations_were_on)
     if os.environ.get("BC250_EXIT_AFTER_RENDER"):

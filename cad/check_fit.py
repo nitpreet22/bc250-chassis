@@ -17,8 +17,10 @@ import FreeCAD as App
 import Part
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DOCUMENT_PATH = os.path.join(PROJECT_DIR, "bc250_cluster.FCStd")
-REPORT_PATH = os.path.join(PROJECT_DIR, "cad", "fit_report.md")
+DOCUMENT_NAME = os.environ.get("BC250_DOCUMENT", "bc250_cluster.FCStd")
+DOCUMENT_PATH = os.path.join(PROJECT_DIR, DOCUMENT_NAME)
+IS_V1 = DOCUMENT_NAME == "bc250_v1.FCStd"
+REPORT_PATH = os.path.join(PROJECT_DIR, "cad", "fit_report_v1.md" if IS_V1 else "fit_report.md")
 
 VOLUME_TOLERANCE = 1.0            # mm^3
 # Assemblies whose overall size is reported (matched by the start of each object's owner name).
@@ -41,6 +43,26 @@ CLEARANCE_PAIRS = [
     ("PSU_MSI_A1000PL", "PSUBox_FrontWall_ChannelOpening"),
     ("PWMFanHub_1", "PSUBox_Lid"),
 ]
+# V1: the PLA parts nearest the metal (rule: at least 3 mm from heatsinks and backplates), and
+# the clearances a board passes when it is lowered in.
+V1_CLEARANCE_PAIRS = [
+    ("Node1_StockHeatsink", "Col1_FanPlate"),
+    ("Node1_StockHeatsink", "Col1_Cradle"),
+    ("Node1_StockHeatsink", "Col1_Crossbar"),
+    ("Node1_Backplate", "Col1_BlowerHolder"),
+    ("Node1_Backplate", "Col1_Crossbar"),
+    ("Node1_Backplate", "Col1_Cradle"),
+    ("Node1_Backplate", "Col2_Divider"),
+    ("Node1_Fan_Lower", "Node1_StockHeatsink"),
+    ("Node1_IOBracket_EST", "Col1_FanPlate"),
+    ("Node1_Blower", "Node1_Backplate"),
+    ("Node1_KO_PowerPlugs", "SideWall_L_CableSlots"),
+    ("Node1_KO_NetworkAdapter", "RoofGrille"),
+    ("Node1_Components", "Col1_Crossbar"),
+    ("Node3_Backplate", "BackPlate"),
+]
+if IS_V1:
+    CLEARANCE_PAIRS = V1_CLEARANCE_PAIRS
 
 
 class FitObject:
@@ -97,7 +119,7 @@ def overlap_volume(a, b):
 def is_inside_source_board_model(a, b):
     """Overlaps between the PCB, components and connectors come from the downloaded STEP itself
     (e.g. through-hole pins modelled inside the PCB), not from our layout."""
-    board_parts = ("_PCB", "_Components", "_Connectors")
+    board_parts = ("_PCB", "_Components", "_Connectors", "_StockHeatsink", "_Backplate")
     return a.owner == b.owner and a.name.endswith(board_parts) and b.name.endswith(board_parts)
 
 
@@ -107,6 +129,9 @@ CLASH_NOTES = {
         "Investigated: bracket is aligned to the 4 cooler holes (95.7 mm square) within 0.1 mm. "
         "Its flat underside sits on 0.4 mm SMD passives and one corner overlaps a 3.5 mm part "
         "next to the (-28.7, -37.2) hole by ~1.8 mm. Likely a board-model inaccuracy; check at test-fit.",
+    ("_Connectors", "_IOBracket_EST"):
+        "Estimated bracket (not in the STEP): the guessed back strip overlaps the connectors' "
+        "through-hole pins. Only the shape guess is wrong here; no printed part comes near it.",
 }
 
 
@@ -158,7 +183,7 @@ def main():
     for item in objects[1:]:
         overall.add(item.box)
 
-    lines = ["# BC-250 cluster fit report", "",
+    lines = ["# BC-250 cluster fit report" + (" (Version 1)" if IS_V1 else ""), "",
              f"Document: `{os.path.basename(DOCUMENT_PATH)}` - {len(objects)} checked objects", ""]
     lines.append(f"## Clashes ({len(clashes)})")
     lines.append("")
@@ -168,8 +193,8 @@ def main():
                   for a, b, v in sorted(clashes, key=lambda c: -c[2])]
     else:
         lines.append("None: no hardware overlaps, nothing passes through the rack, keep-outs are clear.")
-    lines += ["", "Not checked: overlaps between a board's own PCB / components / connectors "
-                  "(they come from the downloaded STEP, e.g. pins modelled inside the PCB)."]
+    lines += ["", "Not checked: overlaps between a board's own PCB / components / connectors / stock "
+                  "heatsink / backplate (they come from the downloaded STEP, e.g. pins modelled inside the PCB)."]
     lines += ["", "## Clearances (minimum distance)", "", "| Between | And | mm |", "|---|---|---|"]
     for name_a, name_b in CLEARANCE_PAIRS:
         distance = by_name[name_a].shape.distToShape(by_name[name_b].shape)[0]
