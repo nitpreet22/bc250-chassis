@@ -70,6 +70,7 @@ def build_case(doc):
     add_feature(doc, group, "SideWall_L_SpliceBars", m.wall_splice_bars(-1), PRINTED_BLACK, "rack")
     add_feature(doc, group, "SideWall_R_SpliceBars", m.wall_splice_bars(+1), PRINTED_BLACK, "rack")
     add_feature(doc, group, "RoofGrille", m.roof(), PRINTED_BLACK, "rack")
+    add_feature(doc, group, "FrameKeepers", m.frame_keepers(), PRINTED_BLACK, "rack")
     add_feature(doc, group, "BackPlate", m.back_plate(), PRINTED_WHITE, "rack")
     for column in m.COLUMNS:
         prefix = f"Col{column.index + 1}"

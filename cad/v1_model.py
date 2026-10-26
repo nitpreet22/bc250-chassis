@@ -45,7 +45,11 @@ TOP_BAND_HEIGHT = 29.0            # R8: logo plate; there is no bottom band (R9)
 WINDOW_INSET = 3.3                # R6
 WINDOW_THICKNESS = 4.5            # R5
 RACK_HOLE_SIZE = 9.1              # R10
-RACK_HOLE_FROM_SIDE = 7.2         # hole centre from the frame's outer side edge (photos; test strip fit 2026-10-15)
+RACK_HOLE_FROM_SIDE = 7.2         # hole centre from the edge of the holed face (photos; test strip fit 2026-10-15)
+# The holes are on each upright's outer side face (the face against the side wall), not on the front:
+# the frame is a rack side frame turned 90 degrees (2026-10-24). Which edge of that face the 7.2 mm is
+# measured from is not confirmed; this assumes the frame's outer (front / back) face.
+RACK_HOLE_FROM_OUTER_FACE = RACK_HOLE_FROM_SIDE
 LOWEST_RACK_HOLE_Z = 35.0         # R11
 RACK_UNIT = 44.45                 # standard EIA pattern, which the R10 photo shows
 RACK_HOLE_OFFSETS_IN_UNIT = (6.35, 22.225, 38.1)
@@ -160,17 +164,17 @@ TIE_SLOT_PLAY = 1.5               # +- along the slot: front-back for cradle / c
 GAP_SHIM = (40.0, 24.0)           # printed FIN_GAP-thick shim used to set each board's position
 HOLD_DOWN_OVERLAP = 2.0           # crossbar lip over the PCB's top edge
 
-# Side windows: clear printed PCTG panels screwed onto the outside of each side wall, over each
-# column's hot zone (fan plate to next divider). The panels carry no load, so they can go on later;
-# until then the openings are taped over so hot air can't leak out sideways.
+# Side windows: printed panels (black PLA; clear PCTG warped) screwed onto the outside of each
+# side wall, over each column's hot zone (fan plate to next divider). The panels carry no load, so
+# they can go on later; until then the openings are taped over so hot air can't leak out sideways.
 WINDOW_MARGIN_Y = 5.0             # opening edge to the fan plate / divider faces
 WINDOW_Z = (75.0, 292.0)          # most of the heatsink (60.9..300.5); the 233 mm panel stays 10 mm off the bed edges
 LEFT_WINDOW_Z = (150.0, 292.0)    # the left wall keeps solid wall round the power-cable slots
 WINDOW_SHEET_OVERLAP = 8.0        # panel past the opening on every side
 WINDOW_SCREW_INSET = 4.0          # screw centre from the opening edge (4 mm from the panel's edge)
-WINDOW_SHEET_THICKNESS = 2.0      # thin prints clearest; M3 x 8 screws reach the nuts
-# The panel holes take M3 screws with room to spare: PCTG shrinks differently from the PLA the
-# coupon measured, and +-0.5 mm over the 234 mm screw span keeps every screw on its nut.
+WINDOW_SHEET_THICKNESS = 2.0      # M3 x 8 screws reach the nuts
+# The panel holes take M3 screws with room to spare: +-0.5 mm over the 234 mm screw span keeps
+# every screw on its nut, whatever the filament's shrink.
 WINDOW_PANEL_HOLE = 4.0
 
 # Every inner part screws to both side walls through "wall blocks" at its ends: an M3 x 12 goes in
@@ -275,23 +279,25 @@ def rack_hole_zs():
             for unit in range(RACK_UNITS) for offset in RACK_HOLE_OFFSETS_IN_UNIT]
 
 
-RACK_HOLE_X = FRAME_WIDTH / 2 - RACK_HOLE_FROM_SIDE
-EAR_SCREW_HOLE_INDICES = (1, 8, 17, 25)     # which rack holes the side-wall ears bolt to (4 per ear)
+RACK_HOLE_X = FRAME_WIDTH / 2 - RACK_HOLE_FROM_SIDE   # only places the ears' slots now (as printed)
+EAR_SCREW_HOLE_INDICES = (1, 8, 17, 25)     # the ears' M6 slots; they face plain steel, so they stay empty
+UPRIGHT_SHEET = 1.5               # steel thickness of the holed face
 
 
 # ---------------------------------------------------------------------------------------------
 # Rack frames (reused, not printed)
 # ---------------------------------------------------------------------------------------------
 def frame_shapes(outer_y, inward):
-    """Uprights with their square holes, top band and window of one frame."""
+    """Uprights with their square holes (in the outer side faces, against the walls), top band and
+    window of one frame."""
     half = FRAME_WIDTH / 2
     inner_x = half - UPRIGHT_FACE_WIDTH
     y_range = sorted((outer_y, outer_y + inward * UPRIGHT_DEPTH))
-    face_y = sorted((outer_y, outer_y + inward * 1.5))
+    hole_y = outer_y + inward * RACK_HOLE_FROM_OUTER_FACE
     holes = []
     for z in rack_hole_zs():
-        for x in (-RACK_HOLE_X, RACK_HOLE_X):
-            holes.append(box((x - RACK_HOLE_SIZE / 2, x + RACK_HOLE_SIZE / 2), face_y,
+        for side_face_x in ((half - UPRIGHT_SHEET, half), (-half, -half + UPRIGHT_SHEET)):
+            holes.append(box(side_face_x, (hole_y - RACK_HOLE_SIZE / 2, hole_y + RACK_HOLE_SIZE / 2),
                              (z - RACK_HOLE_SIZE / 2, z + RACK_HOLE_SIZE / 2)))
     uprights = Part.makeCompound([box((inner_x, half), y_range, (0.0, FRAME_HEIGHT)),
                                   box((-half, -inner_x), y_range, (0.0, FRAME_HEIGHT))])
@@ -573,7 +579,7 @@ def side_wall(side):
 
 
 def window_sheets(side):
-    """The PCTG window panels on one side wall's outside face, with their screw holes."""
+    """The window panels on one side wall's outside face, with their screw holes."""
     sheet_x = (INTERIOR_HALF_WIDTH + SIDE_WALL, INTERIOR_HALF_WIDTH + SIDE_WALL + WINDOW_SHEET_THICKNESS)
     sheets = []
     for column in COLUMNS:
@@ -878,6 +884,53 @@ def roof_tiles():
 
 def roof():
     return Part.makeCompound(roof_tiles())
+
+
+# ---------------------------------------------------------------------------------------------
+# Frame keepers: hold the frames down between the walls in place of the ears' M6 bolts
+# ---------------------------------------------------------------------------------------------
+KEEPER_TAB_THICKNESS = 4.0
+KEEPER_LEG_THICKNESS = 4.0        # outside the wall; the roof screw there becomes M3 x 16
+KEEPER_TAB_INNER_X = 78.0         # clear of the handle's feet (up to X 72.3)
+KEEPER_LEG_PAST_SCREW = 7.0       # material behind the screw slot, along Y
+KEEPER_LEG_BELOW_SCREW = 9.0      # material below the screw slot, along Z
+KEEPER_SCREW_SLOT_PLAY = 2.0      # +- along Z, for any height difference between frame and wall tops
+
+
+def keeper_screw_gap(end):
+    """Roof screw distance from the frame's inner face: the roof block nearest that frame."""
+    if end == "front":
+        return roof_block_ys()[0] - UPRIGHT_DEPTH
+    return (CASE_DEPTH - UPRIGHT_DEPTH) - roof_block_ys()[-1]
+
+
+def frame_keeper(side, end):
+    """One keeper in case coordinates (side +1 right / -1 left, end "front" / "back"): a tab over the
+    top of the upright, the ear and the wall's top edge, and a leg down the wall's outside face to the
+    roof tile's corner screw, which goes through the leg's slot."""
+    wall_out = INTERIOR_HALF_WIDTH + SIDE_WALL
+    leg_out = wall_out + KEEPER_LEG_THICKNESS
+    # Built for the right wall's front frame with Y = 0 at the frame's outer face, then mirrored.
+    screw_y = UPRIGHT_DEPTH + keeper_screw_gap(end)
+    front_y = -EAR_THICKNESS
+    back_y = screw_y + KEEPER_LEG_PAST_SCREW
+    top = FRAME_HEIGHT + KEEPER_TAB_THICKNESS
+    over_frame = box((KEEPER_TAB_INNER_X, leg_out), (front_y, UPRIGHT_DEPTH), (FRAME_HEIGHT, top))
+    over_wall = box((INTERIOR_HALF_WIDTH, leg_out), (front_y, back_y), (FRAME_HEIGHT, top))
+    leg_bottom = ROOF_BLOCK_Z - KEEPER_SCREW_SLOT_PLAY - fit.M3_CLEARANCE_HOLE / 2 - KEEPER_LEG_BELOW_SCREW
+    leg = box((wall_out, leg_out), (front_y, back_y), (leg_bottom, top))
+    shape = over_frame.fuse([over_wall, leg]).removeSplitter()
+    shape = shape.cut(slot_x(fit.M3_CLEARANCE_HOLE, (wall_out, leg_out), screw_y, ROOF_BLOCK_Z, "z",
+                             KEEPER_SCREW_SLOT_PLAY))
+    if side < 0:
+        shape = mirror_x(shape)
+    if end == "back":
+        shape = shape.mirror(App.Vector(0, CASE_DEPTH / 2, 0), App.Vector(0, 1, 0))
+    return shape
+
+
+def frame_keepers():
+    return Part.makeCompound([frame_keeper(side, end) for end in ("front", "back") for side in (+1, -1)])
 
 
 # ---------------------------------------------------------------------------------------------

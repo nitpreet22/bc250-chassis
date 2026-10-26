@@ -40,13 +40,13 @@ def row(shapes_and_rotations, start_y=0.0):
     return parts
 
 
-def stack(shapes_and_rotations, start_x=0.0):
-    """Lay parts one behind the other along Y, BED_GAP apart; returns them in print orientation."""
+def stack(shapes_and_rotations, start_x=0.0, start_y=0.0, gap=BED_GAP):
+    """Lay parts one behind the other along Y, `gap` apart; returns them in print orientation."""
     parts = []
-    y = 0.0
+    y = start_y
     for shape, rotation in shapes_and_rotations:
         parts.append(on_bed(shape, rotation, start_x, y))
-        y = parts[-1].BoundBox.YMax + BED_GAP
+        y = parts[-1].BoundBox.YMax + gap
     return parts
 
 

@@ -117,34 +117,66 @@ and assembly errors instead of needing every hole to line up.
 
 Print files (`cad/print/case_parts.py` regenerates them all from `cad/v1_model.py`):
 
-| File in `cad/print/stl/` | Qty | Notes |
-|---|---|---|
-| `rail_test.stl` | 1 | **Print first** (about 30 min): rail section, plate offcut, press-in nut block, gap shim |
-| `case/wall_R_strip{1,2,3}_{lower,upper}.stl` | 1 each | inside face up |
-| `case/wall_L_strip{1,2,3}_{lower,upper}.stl` | 1 each | inside face up |
-| `case/fanplate_lower.stl`, `case/fanplate_upper.stl` | 3 each | upper bed also has the two joining strips |
-| `case/divider_lower.stl`, `case/divider_upper.stl` | 2 each | |
-| `case/backplate_lower.stl`, `case/backplate_upper.stl` | 1 each | |
-| `case/roof_front.stl`, `case/roof_back.stl` | 1 each | upside down |
-| `case/small_parts.stl` | 1 | 3 lids, 8 splice bars, 2 gap shims |
-| `case/crossbars_holddown.stl` | 1 | optional: crossbars with the hold-down lip |
+Each bed carries as much as fits, but only one colour (white outside, black inside). The plates are
+about 200 mm wide, so no two share a bed; the small black parts fill the space behind or beside the
+black plates instead. The wall pieces print one per bed, centred: two middle strip pieces sharing a
+bed printed poorly.
 
-Assembly order:
+| File in `cad/print/stl/` | Beds | Colour | Notes |
+|---|---|---|---|
+| `rail_test.stl` | 1 | white | **Print first** (about 30 min): rail section, plate offcut, press-in nut block, gap shim |
+| `case/wall_{R,L}_strip{1,3}_{lower,upper}.stl` | 8 | white | inside face up |
+| `case/wall_{R,L}_strip2_{lower,upper}.stl` | 4 | white | inside face up |
+| `case/roof_front.stl`, `case/roof_back.stl` | 2 | white | upside down |
+| `case/fanplate_lower.stl`, `case/fanplate_upper.stl` | 3 each | column 1 white, 2-3 black | upper bed also has the two joining strips |
+| `case/divider_lower.stl` | 2 | black | |
+| `case/divider_upper_lids_a.stl` | 1 | black | divider upper half, lids 1 and 2 (upside down), crossbar 1 |
+| `case/divider_upper_lids_b.stl` | 1 | black | divider upper half, lid 3, crossbars 2 and 3 |
+| `case/backplate_lower.stl` | 1 | black (white if about 270 g is left) | with the 8 wall splice bars beside it |
+| `case/backplate_upper.stl` | 1 | black (same as the lower half) | with the 2 gap shims beside it |
+
+The crossbars now come with the divider beds and carry the board hold-down lip; the crossbars
+already printed work without it.
+
+Filament (decided 2026-10-19): white outside, black inside. Spools on hand, 1 kg each: 2 white,
+3 black, 1 blue (spare), 1 PCTG (unused: it warped). Slicer weights (PLA Matte, 2 walls, 15 % infill) for what
+was left after the column 1 lower fan plate: white about 1.25 kg on 13 beds, 32 h (walls 1.08,
+roof 0.12, column 1 upper fan plate 0.04) against about 1.45 kg left after the test and holder
+prints; black about 0.84 kg on 10 beds, 18.5 h. Print all the white parts first, then decide the
+back plate's colour from what is left.
+
+Tried 2026-10-22: a clear PCTG roof tile on the open A1 failed twice. The first came off the plate at
+layer 6. The second (solid shells, brim, washed plate, bed 70 °C) curled up at its corners by
+layer 5. The 200 × 182 mm solid sheet shrinks too hard, so the roof stays white PLA.
+
+Assembly order (step-by-step pictures: Assembly guide, https://claude.ai/artifact/Puvs9cXiVe4JR6ssHRABEM):
 
 1. Join each side wall's six pieces on the bench (splice bars, then the front-to-back seam screws).
 2. Bolt both walls to the front and back rack frames: an open-topped box.
-3. Screw in the cradles. Stand each board in its cradle and fit its crossbar loosely.
-4. Drop each column's divider halves and fan plate halves (fans, clips, joining strips and blower
-   holder already fitted) down their rails.
-5. Shim the fan gap, slide the board against the shim, tighten cradle and crossbar, remove the shim.
-6. Lids (2 screws each), back plate halves, roof tiles (8 screws). Window panels any time after.
+3. On the bench, screw each blower holder to the lower half of the plate **behind** its board
+   (column 1's to the divider in front of column 2, column 2's to the next divider, column 3's to the
+   back plate; M3 × 10, nuts behind the plate) and drop the blower in from the top.
+4. Then column by column, front to back:
+   1. Cradle, screws loose. Fan plate halves (fans, clips, joining strips fitted) down the front rails.
+   2. Stand the board in the cradle.
+   3. Drop the plate behind the board (lower half with the holder and blower, then the upper half).
+   4. Crossbar last, screws loose. **It must go on after the blower:** the crossbar sits 2.6 mm into
+      the path of the blower and holder behind it, so they can't be lowered past it (checked in the
+      model 2026-10-17; nothing else on the board blocks that path).
+   5. Shim the fan gap, slide the board against the shim, tighten cradle and crossbar, remove the shim.
+5. Cables inside, out through each column's left-wall slot (see Wiring below).
+6. Lids (2 screws each), roof tiles (8 screws: M3 × 12 in the middle blocks, M3 × 16 through the
+   frame keepers at the four corners), then the window panels.
 
-To change a fan or board later: roof tile and that column's lid off, then lift the part out.
+To change a fan or board later: roof tile and that column's lid off, then lift the part out (a board
+needs its crossbar off). To change a blower: roof tile and crossbar off, lift it out of its holder.
 
 ### Side windows (decided 2026-10-15)
 
-Each column has a window opening over its hot zone, closed by a clear **printed PCTG** panel
-screwed to the outside of the wall. The opening is split by the solid band at the wall seam; one
+Each column has a window opening over its hot zone, closed by a **black PLA** panel screwed to the
+outside of the wall. They were meant to be clear PCTG, but on the open A1 every PCTG print warped
+(2026-10-22): two roof tiles came off or curled, and even a solid 2 mm test panel on a 90 °C bed
+came off the plate bent. So the panels are covers, not windows. The opening is split by the solid band at the wall seam; one
 panel covers both parts. The panels carry no load, so they can go on any time. Until then, tape
 card over the openings so hot air can't leak out sideways and back into the intakes.
 
@@ -153,16 +185,34 @@ card over the openings so hot air can't leak out sideways and back into the inta
 | Right wall | 3 | 83.7 × 233 × 2 | `cad/print/stl/window_panel_right.stl` |
 | Left wall (shorter: solid wall round the power-cable slots) | 3 | 83.7 × 158 × 2 | `cad/print/stl/window_panel_left.stl` |
 
-- **Filament:** clear PCTG, about 260 g for all six; one 1 kg spool. Bambu Studio profile
-  "Generic PCTG @BBL A1".
-- **Clarity:** dry the filament, 100 % infill in one direction, slow outer walls. The face against
-  the plate copies the plate: the textured PEI gives a frosted pattern, a smooth plate a glossy face.
-  Printed PCTG is translucent, not glass-clear.
-- **Test first:** print one right panel and screw it on before the other five. The 4 mm holes
-  allow ±0.5 mm; PCTG's shrink hasn't been measured, so the export uses the PLA Matte figure.
+- **Filament:** black PLA Matte, the usual profile, one panel per bed, centred. The textured
+  plate side faces out.
+- **Holes (checked in the model 2026-10-22):** the panel's six holes come from the same screw
+  positions as the walls' holes and nut pockets. All three windows on a wall are the same size, so
+  one file per side fits every column. The hole pattern is symmetric, so a panel can't go on the
+  wrong way round. All 36 screw paths are open through the wall, and no other screw head sits
+  under a panel. The 4 mm holes give an M3 about 0.3 mm of play each way. The STL carries the
+  PLA Matte shrink correction like the walls.
+- **Test first:** print one panel and screw it on before the other five.
 - **Screws:** M3 × 8 from the outside into nuts pressed into the pockets on the wall's inside face.
-- **The view:** the boards stand across the case, so a side window shows each board edge-on: fans,
-  fins, PCB edge and blower. The board faces show only through the front and back frames.
+
+### Wiring (decided 2026-10-25)
+
+- **Fans: all nine on the two PWM hubs at full speed.** Each board has one 4-pin fan header (C1)
+  but three fans. The hubs take 12 V from one PSU SATA cable; their PWM input stays unplugged, so the
+  4-pin fans and blowers run flat out and the 3-pin Arctics always do. Hub A: node 1's three fans and
+  node 2's lower and upper fans. Hub B: node 2's blower and node 3's three fans. The 4th Arctic is
+  unused (it was for the old cable channel).
+- **Every cable leaves through its column's left-wall slot** (40 × 80 mm, 60 mm up, just behind
+  the fan plate). The power sockets sit right behind it; the fan leads, the blower lead and the
+  network cable run down the ~34 mm channel between the board's power edge and the wall. The network
+  cable passes in front of the crossbar. No reprint: the roof's 6 mm grille slots can't pass an RJ45 plug.
+- **Outside:** PSU on the desk beside the left wall, toward the back, 8–10 cm off it, AC end
+  back, away from the intake grilles. It stands on its side in a printed sleeve
+  (`cad/print/psu_sleeve.py`, black, ~9 h 50 min, 257 g, 8 mm brim): open at both ends, a fan grille
+  on both tall sides, 80 mm of cable room in front of the sockets, and corner stops at the socket face. Hubs flat on the desk against the wall between the slots.
+- Assembly guide Part E (E1 cables, E2 lids, E3 roof, E4 keepers, E5 windows) and Part G (wiring,
+  first power-on) have the steps.
 
 ## Version 2 (later): AIO water cooling and the heatsink cut
 

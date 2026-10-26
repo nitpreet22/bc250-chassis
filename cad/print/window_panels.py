@@ -1,15 +1,12 @@
-"""Clear PCTG window panels for the V1 side walls (3 right + 3 left).
+"""Window panels for the V1 side walls (3 right + 3 left), printed in black PLA Matte.
 
 Run:  "C:\\Program Files\\FreeCAD 1.1\\bin\\freecadcmd.exe" cad\\print\\window_panels.py
 Output: cad/print/stl/window_panel_right.stl and window_panel_left.stl, flat, one panel each.
-Print 3 of each with the "Generic PCTG @BBL A1" filament profile.
-
-For the clearest panels:
-  * dry the PCTG first, 100 % infill with the infill lines in one direction, slow outer walls;
-  * the face on the plate copies the plate's surface: the textured PEI gives a frosted pattern,
-    a smooth plate gives a glossy face. Fit the panel with the plate side out.
-Print ONE right panel first and screw it on: the holes allow +-0.5 mm, and PCTG's shrink has not
-been measured (the export uses the PLA Matte figure, print_settings.XY_SCALE).
+Print 3 of each, one per bed, with the usual PLA Matte profile; fit them plate side out.
+They were meant to be clear PCTG, but PCTG warped on the open A1 (2026-10-22), even as a solid
+2 mm panel on a 90 °C bed.
+Print ONE panel first and screw it on: the holes allow +-0.5 mm, and the export carries the
+PLA Matte shrink correction (print_settings.XY_SCALE) like the walls.
 """
 import os
 import sys
