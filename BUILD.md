@@ -43,7 +43,7 @@ Nothing is printed until the part it fits has been measured.
 | 3 | I redo the CAD for V1 and produce print-ready, bed-sized PLA parts with fasteners | - |
 | 4 | Print, then test-fit one node's column before printing the rest | Yes |
 | 5 | Assemble the case, install the nodes, wire the fans and power | Yes |
-| 6 | Set the GPU cap, run a sustained load, read temperatures, adjust | No |
+| 6 | Set the GPU cap, run a sustained load, read temperatures, adjust. **Done 2026-10-27:** see `bench/RESULTS-V1.md` | No |
 
 ### Step 1: reassemble board 3 (stock heatsink)
 
@@ -198,11 +198,13 @@ card over the openings so hot air can't leak out sideways and back into the inta
 
 ### Wiring (decided 2026-10-25)
 
-- **Fans: all nine on the two PWM hubs at full speed.** Each board has one 4-pin fan header (C1)
-  but three fans. The hubs take 12 V from one PSU SATA cable; their PWM input stays unplugged, so the
-  4-pin fans and blowers run flat out and the 3-pin Arctics always do. Hub A: node 1's three fans and
-  node 2's lower and upper fans. Hub B: node 2's blower and node 3's three fans. The 4th Arctic is
-  unused (it was for the old cable channel).
+- **Fans: all nine on the PWM hubs.** Each board has one 4-pin fan header (C1) but three fans. The
+  hubs take 12 V from one PSU SATA cable. Each node's fans plug into the hub that belongs to that
+  node, and that hub's input plugs into the node's fan header (rewired 2026-10-27; they had been mixed
+  between hubs). So every board reports a fan speed, and the 4-pin fans and blowers follow the BIOS
+  fan curve: 50 % at idle, about 85 % by Tctl 75 °C (see `bench/RESULTS-V1.md`). The 3-pin Arctics
+  always run flat out. For full speed, set the BIOS fan mode to Full Speed. The 4th Arctic is unused
+  (it was for the old cable channel).
 - **Every cable leaves through its column's left-wall slot** (40 × 80 mm, 60 mm up, just behind
   the fan plate). The power sockets sit right behind it; the fan leads, the blower lead and the
   network cable run down the ~34 mm channel between the board's power edge and the wall. The network
@@ -225,6 +227,8 @@ The pilot measurements from board 3 are kept for when it resumes.
 3. Fit the AIO on the pilot, check for leaks, and bench-test it.
 4. Repeat on boards 2 and 3.
 5. Rework the case columns for the radiators.
+6. Rerun the V1 thermal tests and compare against `bench/RESULTS-V1.md`, then raise the CPU and
+   GPU caps as far as the 80 °C target allows.
 
 ### How the stock heatsink is built (from MandicReally's model)
 

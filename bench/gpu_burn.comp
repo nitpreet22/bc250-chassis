@@ -1,0 +1,35 @@
+#version 450
+// Pure ALU load: each invocation runs a long chain of fused multiply-adds on
+// registers and touches memory once at the end, so the GPU cores (not the
+// memory bus) do the work. Four independent vec4 chains keep the ALUs busy.
+
+layout(local_size_x = 256) in;
+
+layout(std430, binding = 0) buffer Results {
+    float values[];
+};
+
+layout(push_constant) uniform Params {
+    uint iterations;
+};
+
+void main() {
+    uint id = gl_GlobalInvocationID.x;
+    vec4 a = vec4(float(id) * 1e-7);
+    vec4 b = a + 0.25;
+    vec4 c = a + 0.50;
+    vec4 d = a + 0.75;
+    const vec4 m = vec4(0.999999);
+    const vec4 k = vec4(1e-6);
+
+    for (uint i = 0; i < iterations; i++) {
+        a = fma(a, m, k);
+        b = fma(b, m, k);
+        c = fma(c, m, k);
+        d = fma(d, m, k);
+    }
+
+    // Writing the sum keeps the compiler from discarding the loop.
+    vec4 sum = a + b + c + d;
+    values[id] = sum.x + sum.y + sum.z + sum.w;
+}

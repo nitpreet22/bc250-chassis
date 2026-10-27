@@ -13,6 +13,8 @@ set -euo pipefail
 readonly TTM_PAGES=3014656
 readonly GOVERNOR_COPR=filippor/bazzite
 readonly GOVERNOR_PACKAGE=cyan-skillfish-governor-smu
+# The installer defaulted to America/New_York; the nodes live in Melbourne.
+readonly TIME_ZONE=Australia/Melbourne
 
 step() { printf '\n==> %s\n' "$*"; }
 
@@ -51,6 +53,9 @@ warn_if_kernel_is_known_bad() {
 }
 
 require_sudo_from_user_account
+
+step "Setting the time zone to $TIME_ZONE (the clock itself stays synced by chronyd)"
+timedatectl set-timezone "$TIME_ZONE"
 
 step "Updating the system"
 dnf upgrade --refresh -y

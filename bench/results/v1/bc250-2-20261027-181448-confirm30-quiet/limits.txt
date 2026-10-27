@@ -1,0 +1,8 @@
+# Written by bc250-cpu-limits; applied at boot by bc250-cpu-limits.service.
+[cpu]
+max_clock_mhz = 2300
+max_temp_c = 85
+
+[frequency-range]
+min = 1000    # MHz
+max = 1500   # MHz

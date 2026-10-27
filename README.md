@@ -42,6 +42,9 @@ the 30 mm risers and the handles.
 
 ## Thermal design
 
+This section is the Version 2 (AIO) design. The Version 1 case (stock heatsinks) is built and
+measured: see `bench/RESULTS-V1.md`.
+
 The stock BC-250 fins run along the board's length. So the boards stand vertically, I/O end up,
 and each node gets its own **bottom-to-top air column**, isolated by printed dividers:
 
@@ -217,6 +220,7 @@ Sources: [BC-250 power docs](https://elektricm.github.io/amd-bc250-docs/hardware
 | `cad/build_cluster.py` | Builds the assembly. All dimensions and assumptions are constants at the top. |
 | `cad/check_fit.py` | Clash, keep-out, clearance, size and tube-length report -> `cad/fit_report.md` |
 | `cad/render_views.py` | PNG views -> `cad/renders/` |
+| `bench/` | Sustained-load thermal tests. `bench/RESULTS-V1.md` has the V1 case's results and per-node clock caps. |
 | `reference/` | Downloaded Printables models. See `reference/SOURCES.md` for authors, licences and spec sources. |
 
 ## Rebuild

@@ -1,0 +1,113 @@
+#!/opt/bc250-smu/bin/python3
+"""bc250-cpu-limits: cap the BC-250's CPU clock and set the temperature at
+which the SMU (the APU's power-management firmware) throttles the CPU.
+
+The BC-250's BIOS exposes no ACPI P-states, so Linux has no cpufreq driver and
+cpupower can't cap the clock. The SMU can, through messages from the bc250_smu
+library (github.com/bc250-collective/bc250_smu_oc).
+
+Usage (as root; installed by cpu-limits-setup.sh):
+  bc250-cpu-limits set <max_clock_mhz> <max_temp_c>   save to the config, then apply
+  bc250-cpu-limits apply                               apply the config (run at boot)
+  bc250-cpu-limits show                                print the config and current CPU clocks
+
+Only limits at or below stock are accepted. Raising the clock needs an
+undervolt and a stability test, which this tool doesn't do. The SMU forgets
+both limits on reboot; bc250-cpu-limits.service applies them again.
+"""
+
+import argparse
+import configparser
+import subprocess
+import sys
+
+from bc250_smu import Bc250Smu
+
+CONFIG_PATH = "/etc/bc250-cpu-limits.conf"
+GPU_GOVERNOR_UNIT = "cyan-skillfish-governor-smu.service"
+
+STOCK_MAX_CLOCK_MHZ = 3500
+LOWEST_MAX_CLOCK_MHZ = 2000
+STOCK_MAX_TEMP_C = 100
+LOWEST_MAX_TEMP_C = 60
+
+
+def bounded_int(low, high):
+    def parse(text):
+        value = int(text)
+        if not low <= value <= high:
+            raise argparse.ArgumentTypeError(f"must be between {low} and {high}")
+        return value
+    return parse
+
+
+def read_config():
+    config = configparser.ConfigParser()
+    if not config.read(CONFIG_PATH):
+        sys.exit(f"bc250-cpu-limits: {CONFIG_PATH} is missing")
+    clock = bounded_int(LOWEST_MAX_CLOCK_MHZ, STOCK_MAX_CLOCK_MHZ)(config["cpu"]["max_clock_mhz"])
+    temp = bounded_int(LOWEST_MAX_TEMP_C, STOCK_MAX_TEMP_C)(config["cpu"]["max_temp_c"])
+    return clock, temp
+
+
+def write_config(clock, temp):
+    config = configparser.ConfigParser()
+    config["cpu"] = {"max_clock_mhz": str(clock), "max_temp_c": str(temp)}
+    with open(CONFIG_PATH, "w") as config_file:
+        config_file.write("# Written by bc250-cpu-limits; applied at boot by bc250-cpu-limits.service.\n")
+        config.write(config_file)
+
+
+def gpu_governor_is_running():
+    return subprocess.run(["systemctl", "is-active", "--quiet", GPU_GOVERNOR_UNIT]).returncode == 0
+
+
+def send_to_smu(clock, temp):
+    # The GPU governor reaches the SMU through the same PCI index/data register
+    # pair (0xB8/0xBC). Each side locks single register accesses, not the pair,
+    # so interleaved messages could land in the wrong SMU register. Pause it.
+    governor_was_running = gpu_governor_is_running()
+    if governor_was_running:
+        subprocess.run(["systemctl", "stop", GPU_GOVERNOR_UNIT], check=True)
+    try:
+        smu = Bc250Smu(use_flock=True)
+        try:
+            smu.check_test_message()
+            smu.q3_0x8b_set_cpu_max_temperature(temp)
+            smu.q3_0x8f_set_max_cpu_boost_clk(clock)
+        finally:
+            smu.close()
+    finally:
+        if governor_was_running:
+            subprocess.run(["systemctl", "start", GPU_GOVERNOR_UNIT], check=True)
+    print(f"CPU limits applied: max clock {clock} MHz, SMU throttles the CPU at {temp} °C")
+
+
+def show():
+    clock, temp = read_config()
+    print(f"config ({CONFIG_PATH}): max clock {clock} MHz, max temperature {temp} °C")
+    with open("/proc/cpuinfo") as cpuinfo:
+        clocks = [float(line.split(":")[1]) for line in cpuinfo if line.startswith("cpu MHz")]
+    print(f"current CPU clocks: average {sum(clocks) / len(clocks):.0f} MHz, highest {max(clocks):.0f} MHz")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Cap the BC-250 CPU clock and SMU temperature limit.")
+    commands = parser.add_subparsers(dest="command", required=True)
+    set_command = commands.add_parser("set", help="save new limits to the config and apply them")
+    set_command.add_argument("max_clock_mhz", type=bounded_int(LOWEST_MAX_CLOCK_MHZ, STOCK_MAX_CLOCK_MHZ))
+    set_command.add_argument("max_temp_c", type=bounded_int(LOWEST_MAX_TEMP_C, STOCK_MAX_TEMP_C))
+    commands.add_parser("apply", help="apply the saved config")
+    commands.add_parser("show", help="print the config and current CPU clocks")
+    args = parser.parse_args()
+
+    if args.command == "show":
+        show()
+        return
+    if args.command == "set":
+        write_config(args.max_clock_mhz, args.max_temp_c)
+    send_to_smu(*read_config())
+
+
+if __name__ == "__main__":
+    main()
